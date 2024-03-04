@@ -28,4 +28,5 @@ The script will start running on your SmartPad.
 Step 4: Check the Service Status
 
 View the status of the service:
+
 --sudo systemctl status control-version
