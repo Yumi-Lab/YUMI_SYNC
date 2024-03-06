@@ -1,13 +1,16 @@
 #!/bin/bash
 
-RUTA_SCRIPT="/opt/YUMI_SYNC/yumi_sync.py"
-RUTA_SERVICIO="/etc/systemd/system/yumi_sync.service"
+# Script and service file paths
+SCRIPT_PATH="/opt/YUMI_SYNC/yumi_sync.py"
+SERVICE_PATH="/etc/systemd/system/yumi_sync.service"
 
+# Check if the installation directory exists, if not, create it
 if [ ! -d "/opt/YUMI_SYNC" ]; then
     mkdir -p /opt/YUMI_SYNC
 fi
 
-cat << 'EOF' > "$RUTA_SCRIPT"
+# Create the Python script
+cat << 'EOF' > "$SCRIPT_PATH"
 import os
 import time
 import requests
@@ -103,13 +106,13 @@ while True:
         print(f"Error in monitoring: {e}")
 EOF
 
-
-cat > "$RUTA_SERVICIO" <<EOL
+# Create the systemd service file
+cat > "$SERVICE_PATH" <<EOL
 [Unit]
 Description=Yumi Sync Service
 
 [Service]
-ExecStart=/usr/bin/python3 $RUTA_SCRIPT
+ExecStart=/usr/bin/python3 $SCRIPT_PATH
 WorkingDirectory=/opt/YUMI_SYNC
 Restart=always
 User=pi
@@ -118,10 +121,14 @@ User=pi
 WantedBy=multi-user.target
 EOL
 
+# Reload systemd to recognize changes
 systemctl daemon-reload
 
+# Start the service
 systemctl start yumi_sync
 
+# Enable the service to start on boot
 systemctl enable yumi_sync
 
-echo "Instalation completed. Server running."
+echo "Installation completed. Server is running."
+
