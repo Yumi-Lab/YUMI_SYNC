@@ -11,7 +11,7 @@ if ! command -v pip3 &>/dev/null; then
 fi
 
 # Instalar el módulo Requests
-pip3 install requests || /usr/bin/python3 -m pip install requests
+pip3 install requests &>/dev/null || echo "Warning: Failed to install requests. You may need to install it manually."
 
 # Comprobar si el directorio de instalación existe, si no, crearlo
 if [ ! -d "/opt/YUMI_SYNC" ]; then
