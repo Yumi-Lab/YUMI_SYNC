@@ -17,7 +17,7 @@ git clone https://github.com/Yumi-Lab/YUMI-SYNC.git
 ```
 
 ```bash
-cd YUMI-ID
+cd YUMI-SYNC
 ```
 
 Step 3: Grant Execution Permissions Grant execution permissions to the installation script.
