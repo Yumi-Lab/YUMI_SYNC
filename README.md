@@ -1,32 +1,29 @@
-Step 1: Transfer the Script to Your SmartPad
+<div align='center'>
 
-First, make sure that the YUMI_ID.sh file is present on your local computer. Use the scp command to transfer the script to your SmartPad. Here's how to do it:
+<h1>Control Version Sync</h1>
+<p>This script automates the setup of a service called "Yumi Sync Service" that monitors a file for changes, sending its data to a specified server. It installs necessary dependencies, creates the Python script for monitoring and sending data, sets up a systemd service for automatic execution, and starts and enables the service for continuous operation.</p>
 
---scp yumi_sync_install.sh pi@192.168.1.XX:/home/pi/
+</div>
 
-This command copies the YUMI_ID.sh file to the home directory of the pi user on your SmartPad.
+### :gear: Installation
 
-Step 2: Grant Execution Permissions
-
-Now, connect to your SmartPad using SSH. You will need to use the password for the pi user.
-
---ssh pi@192.168.1.XX
-
-Once connected, grant execution permissions to the script using the following command:
-
---chmod +x yumi_sync_install.sh
-
-This will allow the script to be executed.
-
-Step 3: Execute the Script
-To run the script, use the following command:
-
---./yumi_sync_install.sh
-
-The script will start running on your SmartPad.
-
-Step 4: Check the Service Status
-
-View the status of the service:
-
---sudo systemctl status control-version
+Step 1: Access Your SmartPad First, connect to your SmartPad using SSH. You will need to use the password for the pi user.
+```bash
+ssh pi@192.168.1.XX
+```
+Step 2: Clone the Repository Once connected, clone the repository containing the installation script. Navigate to the cloned repository directory.
+```bash
+git clone git@github.com:Yumi-Lab/YUMI-ID.git cd YUMI-ID
+```
+Step 3: Grant Execution Permissions Grant execution permissions to the installation script.
+```bash
+chmod +x yumi_sync_install.sh
+```
+Step 4: Execute the Script Run the installation script.
+```bash
+./yumi_sync_install.sh
+```
+Step 5: Check the Service Status
+```bash
+sudo systemctl status yumi_sync
+```
