@@ -13,8 +13,13 @@ ssh pi@192.168.1.XX
 ```
 Step 2: Clone the Repository Once connected, clone the repository containing the installation script. Navigate to the cloned repository directory.
 ```bash
-git clone git@github.com:Yumi-Lab/YUMI-ID.git cd YUMI-ID
+git clone git@github.com:Yumi-Lab/YUMI-ID.git 
 ```
+
+```bash
+cd YUMI-ID
+```
+
 Step 3: Grant Execution Permissions Grant execution permissions to the installation script.
 ```bash
 chmod +x yumi_sync_install.sh
