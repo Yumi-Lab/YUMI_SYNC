@@ -4,21 +4,15 @@
 SCRIPT_PATH="/opt/YUMI_SYNC/yumi_sync.py"
 SERVICE_PATH="/etc/systemd/system/yumi_sync.service"
 
-# Verificar si pip está disponible
-if ! command -v pip3 &>/dev/null; then
-    echo "Error: pip3 is not installed. Please install it manually."
-    exit 1
-fi
+# Install Python module requests using apt
+apt install -y python3-requests
 
-# Instalar el módulo Requests
-pip3 install requests &>/dev/null || echo "Warning: Failed to install requests. You may need to install it manually."
-
-# Comprobar si el directorio de instalación existe, si no, crearlo
+# Check if the installation directory exists, if not, create it
 if [ ! -d "/opt/YUMI_SYNC" ]; then
     mkdir -p /opt/YUMI_SYNC
 fi
 
-# Crear el script de Python
+# Create the Python script
 cat << 'EOF' > "$SCRIPT_PATH"
 import os
 import time
@@ -115,7 +109,7 @@ while True:
         print(f"Error in monitoring: {e}")
 EOF
 
-# Crear el archivo de servicio systemd
+# Create the systemd service file
 cat > "$SERVICE_PATH" <<EOL
 [Unit]
 Description=Yumi Sync Service
@@ -130,13 +124,13 @@ User=pi
 WantedBy=multi-user.target
 EOL
 
-# Recargar systemd para reconocer los cambios
+# Reload systemd to recognize changes
 systemctl daemon-reload
 
-# Iniciar el servicio
+# Start the service
 systemctl start yumi_sync
 
-# Habilitar el servicio para que se inicie en el arranque
+# Enable the service to start on boot
 systemctl enable yumi_sync
 
 echo "Installation completed. Server is running."
