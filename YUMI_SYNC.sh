@@ -4,6 +4,9 @@
 SCRIPT_PATH="/opt/YUMI_SYNC/yumi_sync.py"
 SERVICE_PATH="/etc/systemd/system/yumi_sync.service"
 
+# Instalar el módulo requests
+/usr/bin/python3 -m pip install requests
+
 # Check if the installation directory exists, if not, create it
 if [ ! -d "/opt/YUMI_SYNC" ]; then
     mkdir -p /opt/YUMI_SYNC
