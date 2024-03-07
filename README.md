@@ -22,7 +22,7 @@ cd YUMI-SYNC
 
 Step 3: Grant Execution Permissions Grant execution permissions to the installation script.
 ```bash
-chmod +x yumi_sync_install.sh
+sudo chmod +x yumi_sync_install.sh
 ```
 Step 4: Execute the Script Run the installation script.
 ```bash
