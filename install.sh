@@ -65,8 +65,22 @@ User=pi
 WantedBy=multi-user.target
 EOL
 
-# Check if moonraker.conf exists, if not, create it and add the content
-if [ ! -f "$MOONRAKER_CONF" ]; then
+
+if [ -f "$MOONRAKER_CONF" ]; then
+    if grep -q "update_manager Yumi_Sync" "$MOONRAKER_CONF"; then
+        echo "La instrucción ya existe en moonraker.conf. No se necesita agregar nuevamente."
+    else
+        cat >> "$MOONRAKER_CONF" <<EOL
+[update_manager Yumi_Sync]
+type: git_repo
+path: ~/YUMI_SYNC
+origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
+primary_branch: main
+managed_services: yumi_sync
+install_script: $INSTALL_SCRIPT_PATH
+EOL
+    fi
+else
     cat > "$MOONRAKER_CONF" <<EOL
 [update_manager Yumi_Sync]
 type: git_repo
@@ -77,6 +91,7 @@ managed_services: yumi_sync
 install_script: $INSTALL_SCRIPT_PATH
 EOL
 fi
+
 
 # Reload systemd to recognize the changes
 systemctl daemon-reload
