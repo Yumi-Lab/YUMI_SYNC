@@ -32,3 +32,19 @@ Step 5: Check the Service Status
 ```bash
 sudo systemctl status yumi_sync
 ```
+
+
+### :gear: Desinstallation
+
+Step 1: Grant Execution Permissions Grant execution permissions to the Uninstaller script.
+```bash
+sudo chmod +x uninstaller.sh
+```
+Step 2: Execute the Script Run the Uninstaller script.
+```bash
+sudo ./uninstaller.sh
+```
+Step 3: Check the Service Status
+```bash
+sudo systemctl status yumi_sync
+```
