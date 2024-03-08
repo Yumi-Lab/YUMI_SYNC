@@ -26,7 +26,7 @@ sudo chmod +x install.sh
 ```
 Step 4: Execute the Script Run the installation script.
 ```bash
-sudo ./yumi_sync_install.sh
+sudo ./install.sh
 ```
 Step 5: Check the Service Status
 ```bash
