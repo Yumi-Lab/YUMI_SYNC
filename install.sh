@@ -40,7 +40,7 @@ fi
 # Check if requests is installed, if not, install it
 if ! python3 -c "import requests" &>/dev/null; then
     echo "Installing requests..."
-    sudo pip3 install requests
+    sudo apt install python3-requests
 fi
 
 # Check if netifaces is installed, if not, install it
