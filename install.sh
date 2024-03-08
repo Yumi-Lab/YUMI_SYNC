@@ -18,10 +18,7 @@ else
     git -C "$REPO_DIR" pull
 fi
 
-# Copy the Python script to the installation directory
-cp "$REPO_DIR/yumi_sync.py" "$SCRIPT_PATH"
-
-# Ensure the script is executable
+# Ensure the script Python is executable
 chmod +x "$SCRIPT_PATH"
 
 # Create the systemd service file
