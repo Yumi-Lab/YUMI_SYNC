@@ -13,20 +13,20 @@ ssh pi@192.168.1.XX
 ```
 Step 2: Clone the Repository Once connected, clone the repository containing the installation script. Navigate to the cloned repository directory.
 ```bash
-git clone https://github.com/Yumi-Lab/YUMI-SYNC.git
+git clone https://github.com/Yumi-Lab/YUMI_SYNC.git
 ```
 
 ```bash
-cd YUMI-SYNC
+cd YUMI_SYNC
 ```
 
 Step 3: Grant Execution Permissions Grant execution permissions to the installation script.
 ```bash
-sudo chmod +x yumi_sync_install.sh
+sudo chmod +x install.sh
 ```
 Step 4: Execute the Script Run the installation script.
 ```bash
-sudo ./yumi_sync_install.sh
+sudo ./install.sh
 ```
 Step 5: Check the Service Status
 ```bash
