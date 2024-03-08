@@ -78,7 +78,7 @@ managed_services: yumi_sync
 install_script: $INSTALL_SCRIPT_PATH
 EOL
     else
-        echo "La instrucción ya existe en moonraker.conf. No se necesita agregar nuevamente."
+        echo "The instruction already exists in moonraker.conf. It does not need to be added again."
     fi
 else
     cat > "$MOONRAKER_CONF" <<EOL
