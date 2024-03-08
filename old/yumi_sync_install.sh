@@ -1,39 +1,13 @@
 #!/bin/bash
 
-<<<<<<< HEAD
-# Define paths for the script and the systemd service file
-SCRIPT_PATH="/home/pi/YUMI_SYNC/yumi_sync.py"
-SERVICE_PATH="/etc/systemd/system/yumi_sync.service"
-REPO_URL="https://github.com/Yumi-Lab/YUMI-SYNC.git"
-REPO_DIR="/home/pi/YUMI_SYNC_repo"
-=======
 # Script and service file paths
 SCRIPT_PATH="/opt/YUMI_SYNC/yumi_sync.py"
 SERVICE_PATH="/etc/systemd/system/yumi_sync.service"
->>>>>>> 919e9d3b6767d0fceb4a6e035340d2b974bc4ed4
 
 # Install Python module requests using apt
 apt install -y python3-requests
 
 # Check if the installation directory exists, if not, create it
-<<<<<<< HEAD
-if [ ! -d "/home/pi/YUMI_SYNC" ]; then
-    mkdir -p /home/pi/YUMI_SYNC
-fi
-
-# Clone or update the repository to the latest version
-if [ ! -d "$REPO_DIR" ]; then
-    git clone "$REPO_URL" "$REPO_DIR"
-else
-    git -C "$REPO_DIR" pull
-fi
-
-# Copy the Python script to the installation directory
-cp "$REPO_DIR/yumi_sync.py" "$SCRIPT_PATH"
-
-# Ensure the script is executable
-chmod +x "$SCRIPT_PATH"
-=======
 if [ ! -d "/opt/YUMI_SYNC" ]; then
     mkdir -p /opt/YUMI_SYNC
 fi
@@ -134,7 +108,6 @@ while True:
     except Exception as e:
         print(f"Error in monitoring: {e}")
 EOF
->>>>>>> 919e9d3b6767d0fceb4a6e035340d2b974bc4ed4
 
 # Create the systemd service file
 cat > "$SERVICE_PATH" <<EOL
@@ -143,11 +116,7 @@ Description=Yumi Sync Service
 
 [Service]
 ExecStart=/usr/bin/python3 $SCRIPT_PATH
-<<<<<<< HEAD
-WorkingDirectory=/home/pi/YUMI_SYNC
-=======
 WorkingDirectory=/opt/YUMI_SYNC
->>>>>>> 919e9d3b6767d0fceb4a6e035340d2b974bc4ed4
 Restart=always
 User=pi
 
@@ -155,20 +124,6 @@ User=pi
 WantedBy=multi-user.target
 EOL
 
-<<<<<<< HEAD
-# Reload systemd to recognize the changes
-systemctl daemon-reload
-
-# Start the service
-systemctl start yumi_sync.service
-
-# Enable the service to start on boot
-<<<<<<< HEAD:install.sh
-systemctl enable yumi_sync.service
-
-echo "Installation completed. The YUMI_SYNC service is running and enabled on boot."
-=======
-=======
 # Reload systemd to recognize changes
 systemctl daemon-reload
 
@@ -179,4 +134,3 @@ systemctl start yumi_sync
 systemctl enable yumi_sync
 
 echo "Installation completed. Server is running."
->>>>>>> 919e9d3b6767d0fceb4a6e035340d2b974bc4ed4
