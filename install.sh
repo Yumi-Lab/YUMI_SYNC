@@ -1,5 +1,5 @@
 #!/bin/bash
-set -x
+#set -x
 
 # Define paths for the script, the systemd service file, and the moonraker.conf file
 SCRIPT_PATH="/home/pi/YUMI_SYNC/yumi_sync.py"
