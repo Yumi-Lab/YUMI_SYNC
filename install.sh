@@ -71,18 +71,23 @@ EOL
 if [ -f "$MOONRAKER_CONF" ]; then
     if ! grep -q "update_manager Yumi_Sync" "$MOONRAKER_CONF"; then
         cat >> "$MOONRAKER_CONF" <<EOL
+
+# Yumi_Sync update_manager entry
 [include yumi_sync.cfg]
 EOL
     else
         echo "The instruction already exists in moonraker.conf. It does not need to be added again."
     fi
-else
-    
-cat >> "$MOONRAKER_CONF" <<EOF
 
-# Yumi_Sync update_manager entry
-[include yumi_sync.cfg]
-EOF
+# check if yumi_sync.cfg existe, sinon le créer
+if [ ! -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
+    touch /home/pi/printer_data/config/yumi_sync.cfg
+    echo "The file /home/pi/printer_data/config/yumi_sync.cfg was successfully created."
+fi
+else
+    echo "The file /home/pi/printer_data/config/yumi_sync.cfg was already created."
+fi
+
 cat > /home/pi/printer_data/config/yumi_sync.cfg <<EOF
 [update_manager yumi_sync]
 type: git_repo
