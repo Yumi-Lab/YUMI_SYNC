@@ -82,7 +82,7 @@ EOL
     fi
 else
     cat > "$MOONRAKER_CONF" <<EOL
-[update_manager Yumi_Sync]
+[update_manager yumi_sync]
 type: git_repo
 path: ~/YUMI_SYNC
 origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
@@ -92,7 +92,8 @@ install_script: $INSTALL_SCRIPT_PATH
 EOL
 fi
 
-
+# give moonraker permitted to restart service
+echo "yumi_sync" >> ~/printer_data/moonraker.asvc
 
 # Reload systemd to recognize the changes
 systemctl daemon-reload
