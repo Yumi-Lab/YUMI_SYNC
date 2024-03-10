@@ -93,7 +93,7 @@ EOL
 fi
 
 # give moonraker permitted to restart service
-echo "yumi_sync" >> ~/printer_data/moonraker.asvc
+sudo -u "$USER" bash -c 'echo "yumi_sync" >> ~/printer_data/moonraker.asvc'
 
 # Reload systemd to recognize the changes
 systemctl daemon-reload
