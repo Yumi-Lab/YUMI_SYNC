@@ -82,7 +82,7 @@ EOL
 # check if yumi_sync.cfg existe, sinon le créer
 if [ ! -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
     touch /home/pi/printer_data/config/yumi_sync.cfg
-    echo "The file /home/pi/printer_data/config/yumi_sync.cfg was successfully created."
+    echo "command "touch" for create /home/pi/printer_data/config/yumi_sync.cfg file."
 fi
 else
     echo "The file /home/pi/printer_data/config/yumi_sync.cfg was already created."
