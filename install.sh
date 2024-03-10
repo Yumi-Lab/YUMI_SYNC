@@ -97,7 +97,7 @@ primary_branch: main
 managed_services: yumi_sync
 install_script: $INSTALL_SCRIPT_PATH
 EOF
-fi
+
 #check if the yumi_sync.cfg is create.
 if [ -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
     echo "The file /home/pi/printer_data/config/yumi_sync.cfg was successfully created."
