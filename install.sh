@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 
 # Define paths for the script, the systemd service file, and the moonraker.conf file
 SCRIPT_PATH="/home/pi/YUMI_SYNC/yumi_sync.py"
@@ -84,7 +85,7 @@ path: ~/YUMI_SYNC
 origin: $REPO_URL
 primary_branch: main
 managed_services: yumi_sync
-install_script: $INSTALL_SCRIPT_PATH" >> "$MOONRAKER_CONF_FOLDER"/yumi_sync.cfg
+install_script: $INSTALL_SCRIPT_PATH" > "$MOONRAKER_CONF_FOLDER"/yumi_sync.cfg
 
 fi
 
