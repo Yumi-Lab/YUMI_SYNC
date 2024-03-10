@@ -6,7 +6,7 @@ SERVICE_PATH="/etc/systemd/system/yumi_sync.service"
 REPO_URL="https://github.com/Yumi-Lab/YUMI-SYNC.git"
 REPO_DIR="/home/pi/YUMI_SYNC"
 MOONRAKER_CONF="/home/pi/printer_data/config/moonraker.conf"
-MOONRAKER_CONF_FOLDER="/home/pi/printer_data/config/"
+MOONRAKER_CONF_FOLDER="/home/pi/printer_data/config"
 INSTALL_SCRIPT_PATH="/home/pi/YUMI_SYNC/install.sh"
 
 # Check if the installation directory exists, if not, create it
