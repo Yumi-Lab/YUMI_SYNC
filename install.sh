@@ -6,6 +6,7 @@ SERVICE_PATH="/etc/systemd/system/yumi_sync.service"
 REPO_URL="https://github.com/Yumi-Lab/YUMI-SYNC.git"
 REPO_DIR="/home/pi/YUMI_SYNC"
 MOONRAKER_CONF="/home/pi/printer_data/config/moonraker.conf"
+MOONRAKER_CONF_FOLDER="/home/pi/printer_data/config/"
 INSTALL_SCRIPT_PATH="/home/pi/YUMI_SYNC/install.sh"
 
 # Check if the installation directory exists, if not, create it
@@ -69,27 +70,22 @@ EOL
 if [ -f "$MOONRAKER_CONF" ]; then
     if ! grep -q "update_manager Yumi_Sync" "$MOONRAKER_CONF"; then
         cat >> "$MOONRAKER_CONF" <<EOL
-[update_manager Yumi_Sync]
-type: git_repo
-path: ~/YUMI_SYNC
-origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
-primary_branch: main
-managed_services: yumi_sync
-install_script: $INSTALL_SCRIPT_PATH
+[include yumi_sync.cfg]
 EOL
     else
         echo "The instruction already exists in moonraker.conf. It does not need to be added again."
     fi
 else
-    cat > "$MOONRAKER_CONF" <<EOL
-[update_manager yumi_sync]
+    
+echo "[include yumi_sync.cfg]" >> "$MOONRAKER_CONF"
+echo "[update_manager yumi_sync]
 type: git_repo
 path: ~/YUMI_SYNC
-origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
+origin: $REPO_URL
 primary_branch: main
 managed_services: yumi_sync
-install_script: $INSTALL_SCRIPT_PATH
-EOL
+install_script: $INSTALL_SCRIPT_PATH" >> "$MOONRAKER_CONF_FOLDER"/yumi_sync.cfg
+
 fi
 
 # give moonraker permitted to restart service
