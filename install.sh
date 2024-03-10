@@ -78,15 +78,20 @@ EOL
     fi
 else
     
-echo "[include yumi_sync.cfg]" >> "$MOONRAKER_CONF"
-echo "[update_manager yumi_sync]
+cat >> "$MOONRAKER_CONF" <<EOF
+
+# Yumi_Sync update_manager entry
+[include yumi_sync.cfg]
+EOF
+cat > "$MOONRAKER_CONF_FOLDER"/yumi_sync.cfg <<EOF
+[update_manager yumi_sync]
 type: git_repo
 path: ~/YUMI_SYNC
 origin: $REPO_URL
 primary_branch: main
 managed_services: yumi_sync
-install_script: $INSTALL_SCRIPT_PATH" > "$MOONRAKER_CONF_FOLDER"/yumi_sync.cfg
-
+install_script: $INSTALL_SCRIPT_PATH
+EOF
 fi
 
 # give moonraker permitted to restart service
