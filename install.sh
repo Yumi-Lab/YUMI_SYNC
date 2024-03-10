@@ -83,15 +83,21 @@ cat >> "$MOONRAKER_CONF" <<EOF
 # Yumi_Sync update_manager entry
 [include yumi_sync.cfg]
 EOF
-cat > "$MOONRAKER_CONF_FOLDER"/yumi_sync.cfg <<EOF
+cat > /home/pi/printer_data/config/yumi_sync.cfg <<EOF
 [update_manager yumi_sync]
 type: git_repo
 path: ~/YUMI_SYNC
-origin: $REPO_URL
+origin: https://github.com/Yumi-Lab/YUMI-SYNC.git
 primary_branch: main
 managed_services: yumi_sync
 install_script: $INSTALL_SCRIPT_PATH
 EOF
+fi
+#check if the yumi_sync.cfg is create.
+if [ -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
+    echo "The file /home/pi/printer_data/config/yumi_sync.cfg was successfully created."
+else
+    echo "Error: The file /home/pi/printer_data/config/yumi_sync.cfg was not created."
 fi
 
 # give moonraker permitted to restart service
