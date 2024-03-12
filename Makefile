@@ -18,7 +18,7 @@ uninstall: ## Uninstall YUMI_SYNC
 	@bash -c 'scripts/uninstall.sh'
 
 rebuildvenv: ## Rebuild virtual environment
-	@bash -c 'scripts/rebuildvenv.sh'
+	@bash -c 'scripts/install.sh -r'
 
 update: ## Fetch latest changes
 	@git fetch && git pull
