@@ -36,9 +36,9 @@ create_virtualenv() {
     "${py_bin}" -m venv "${PWD}/venv"
     printf "Install requirements ...\n"
     if [[ "$(uname -m)" =~ arm[67]l ]]; then
-        "${PWD}"/venv/bin/pip --extra-index-url https://www.piwheels.org/simple -r "${PWD}/requirements.txt"
+        "${PWD}"/venv/bin/pip install --extra-index-url https://www.piwheels.org/simple -r "${PWD}/requirements.txt"
     else
-        "${PWD}"/venv/bin/pip -r "${PWD}/requirements.txt"
+        "${PWD}"/venv/bin/pip install -r "${PWD}/requirements.txt"
     fi
 }
 
