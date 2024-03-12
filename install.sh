@@ -68,27 +68,13 @@ WantedBy=multi-user.target
 EOL
 
 
+# Check if the moonraker.conf file exists
 if [ -f "$MOONRAKER_CONF" ]; then
-    if ! grep -q "update_manager Yumi_Sync" "$MOONRAKER_CONF"; then
+    # Add the configuration block to the moonraker.conf file
+    if ! grep -q "update_manager yumi_sync" "$MOONRAKER_CONF"; then
         cat >> "$MOONRAKER_CONF" <<EOL
 
 # Yumi_Sync update_manager entry
-[include yumi_sync.cfg]
-EOL
-    else
-        echo "The instruction already exists in moonraker.conf. It does not need to be added again."
-    fi
-
-# check if yumi_sync.cfg existe, sinon le créer
-if [ ! -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
-    touch /home/pi/printer_data/config/yumi_sync.cfg
-    echo "command "touch" for create /home/pi/printer_data/config/yumi_sync.cfg file."
-fi
-else
-    echo "The file /home/pi/printer_data/config/yumi_sync.cfg was already created."
-fi
-
-cat > /home/pi/printer_data/config/yumi_sync.cfg <<EOF
 [update_manager yumi_sync]
 type: git_repo
 path: ~/YUMI_SYNC
@@ -96,13 +82,13 @@ origin: https://github.com/Yumi-Lab/YUMI-SYNC.git
 primary_branch: main
 managed_services: yumi_sync
 install_script: $INSTALL_SCRIPT_PATH
-EOF
-
-#check if the yumi_sync.cfg is create.
-if [ -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
-    echo "The file /home/pi/printer_data/config/yumi_sync.cfg was successfully created."
+EOL
+        echo "The configuration block has been successfully added to moonraker.conf."
+    else
+        echo "The configuration block already exists in moonraker.conf. No need to add it again."
+    fi
 else
-    echo "Error: The file /home/pi/printer_data/config/yumi_sync.cfg was not created."
+    echo "Error: The moonraker.conf file does not exist."
 fi
 
 # give moonraker permitted to restart service

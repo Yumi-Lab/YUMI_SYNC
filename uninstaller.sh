@@ -31,6 +31,9 @@ fi
 # Remove the moonraker.conf config-sync-git if it exists
 sed -i '/$CONFIG_SYNC_GIT/d' "$MOONRAKER_CONF"
 
+# Remove the monitoring_state.json file if it exists
+rm -f "/home/pi/monitoring_state.json"
+
 # Optionally, uninstall dependencies (requests and netifaces)
 
 # Uninstall requests if it was installed
