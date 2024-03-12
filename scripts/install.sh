@@ -19,6 +19,7 @@ main() {
         if ! get_python_version; then
             install_python
         fi
+        create_virtualenv
     fi
 }
 
