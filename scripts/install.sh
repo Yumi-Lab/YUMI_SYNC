@@ -37,7 +37,7 @@ get_python_version() {
     else
         version="$("${py_bin}" --version)"
         major="$(cut -f2 -d" " <<< "${version}" | cut -f1 -d".")"
-        if [[ "${major}" -lt 5 ]]; then
+        if [[ "${major}" -lt 3 ]]; then
             py3_not_installed_msg
             return 1
         else
