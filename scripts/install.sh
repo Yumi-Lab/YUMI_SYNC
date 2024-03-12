@@ -4,8 +4,21 @@ set -e
 set -x
 
 main() {
-    if ! get_python_version; then
-        install_python
+    local rebuildvenv
+    case "${@}" in
+        -r|--rebuildvenv)
+            rebuildvenv="true"
+        ;;
+        *)
+        ;;
+    esac
+    if [[ "${rebuildvenv}" = "true" ]]; then
+        rebuild_venv
+        exit 0
+    else
+        if ! get_python_version; then
+            install_python
+        fi
     fi
 }
 
@@ -21,11 +34,6 @@ py3_not_installed_msg() {
 
 py_install_hint() {
     printf "Trying to install Python3'\n"
-}
-
-install_python() {
-    sudo apt-get update --yes --allow-releaseinfo-change
-    sudo apt-get install --yes python3
 }
 
 get_python_version() {
@@ -46,7 +54,22 @@ get_python_version() {
     fi
 }
 
+install_python() {
+    sudo apt-get update --allow-releaseinfo-change
+    sudo apt-get install --yes python3
+}
+
+create_virtualenv() {
+
+}
+
+rebuild_venv() {
+    if [[ -d "${venv}" ]]; then
+        rm -f "${PWD}/venv"
+    fi
+    create_virtualenv
+}
 
 if [[ "${BASH_SOURCE[0]}" = "${0}" ]]; then
-    main
+    main "${@}"
 fi
