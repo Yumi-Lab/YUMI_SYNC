@@ -60,7 +60,10 @@ install_python() {
 }
 
 create_virtualenv() {
-
+    local py_bin
+    py_bin="$(which python)"
+    printf "Creating virtual environment ...\n"
+    "${py_bin}" -m venv "${PWD}/venv"
 }
 
 rebuild_venv() {
