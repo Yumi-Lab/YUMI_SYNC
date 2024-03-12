@@ -34,10 +34,17 @@ create_virtualenv() {
     py_bin="$(which python3)"
     printf "Creating virtual environment ...\n"
     "${py_bin}" -m venv "${PWD}/venv"
+    printf "Install requirements ...\n"
+    if [[ "$(uname -m)" =~ arm[67]l ]]; then
+        "${PWD}"/venv/bin/pip --extra-index-url https://www.piwheels.org/simple -r "${PWD}/requirements.txt"
+    else
+        "${PWD}"/venv/bin/pip -r "${PWD}/requirements.txt"
+    fi
 }
 
 rebuild_venv() {
     if [[ -d "${PWD}/venv" ]]; then
+        printf "Removing old virtual environment...\n"
         rm -f "${PWD}/venv"
     fi
     create_virtualenv
