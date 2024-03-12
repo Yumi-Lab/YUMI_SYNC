@@ -23,7 +23,7 @@ INSTALL_SCRIPT_PATH="/home/pi/YUMI_SYNC/install.sh"
 #fi
 
 # Ensure the script Python is executable
-chmod +x "$SCRIPT_PATH"
+sudo chmod +x "$SCRIPT_PATH"
 
 # Vérifier si python3 est installé
 if command -v python3 &>/dev/null; then
