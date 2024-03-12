@@ -45,7 +45,7 @@ create_virtualenv() {
 rebuild_venv() {
     if [[ -d "${PWD}/venv" ]]; then
         printf "Removing old virtual environment...\n"
-        rm -f "${PWD}/venv"
+        rm -rf "${PWD}/venv"
     fi
     create_virtualenv
 }
