@@ -31,9 +31,9 @@ main() {
 }
 
 install_dependencies() {
-    sudo apt-get update --allow-releaseinfo-change
+    apt-get update --allow-releaseinfo-change
     # shellcheck disable=SC2086
-    sudo apt-get install --yes ${PKGLIST#}
+    apt-get install --yes ${PKGLIST#}
 }
 
 create_virtualenv() {
