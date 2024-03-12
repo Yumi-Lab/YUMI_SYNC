@@ -37,7 +37,7 @@ create_virtualenv() {
 }
 
 rebuild_venv() {
-    if [[ -d "${venv}" ]]; then
+    if [[ -d "${PWD}/venv" ]]; then
         rm -f "${PWD}/venv"
     fi
     create_virtualenv
