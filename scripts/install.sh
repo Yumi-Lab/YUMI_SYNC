@@ -38,7 +38,7 @@ py_install_hint() {
 
 get_python_version() {
     local major version py_bin
-    py_bin="$(which python 2>/dev/null)"
+    py_bin="$(which python3 2>/dev/null)"
     if [[ -z "${py_bin}" ]]; then
         py_not_installed_msg
         return 1
@@ -61,7 +61,7 @@ install_python() {
 
 create_virtualenv() {
     local py_bin
-    py_bin="$(which python)"
+    py_bin="$(which python3)"
     printf "Creating virtual environment ...\n"
     "${py_bin}" -m venv "${PWD}/venv"
 }
