@@ -58,7 +58,7 @@ rebuild_venv() {
 }
 
 create_service_file() {
-    cat > "${SERVICE_FILE_PATH}" << EOF
+    cat << EOF > "${SERVICE_FILE_PATH}"
 [Unit]
 Description=Yumi Sync Service
 Requires=network-online.target
