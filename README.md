@@ -22,11 +22,11 @@ cd YUMI_SYNC
 
 Step 3: Grant Execution Permissions Grant execution permissions to the installation script.
 ```bash
-sudo chmod +x install.sh
+chmod +x install.sh
 ```
 Step 4: Execute the Script Run the installation script.
 ```bash
-sudo ./install.sh
+./install.sh
 ```
 Step 5: Check the Service Status
 ```bash
