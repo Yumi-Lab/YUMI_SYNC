@@ -25,26 +25,42 @@ INSTALL_SCRIPT_PATH="/home/pi/YUMI_SYNC/install.sh"
 # Ensure the script Python is executable
 chmod +x "$SCRIPT_PATH"
 
+# Vérifier si python3 est installé
+if command -v python3 &>/dev/null; then
+    echo "python3 est installé"
+else
+    echo "python3 n'est pas installé. Veuillez exécuter la commande suivante pour l'installer :"
+    echo "sudo apt-get install python3"
+    exit 1
+fi
+
+# Vérifier si netifaces est installé
+if python3 -c "import netifaces" &>/dev/null; then
+    echo "netifaces est installé"
+else
+    echo "netifaces n'est pas installé. Veuillez exécuter la commande suivante pour l'installer :"
+    echo "sudo apt-get install python3-netifaces"
+    exit 1
+fi
+
 # Vérifier si pip est installé
 if command -v pip > /dev/null 2>&1; then
     echo "pip est installé"
 else
-    echo "pip n'est pas installé"
+    echo "pip n'est pas installé. Veuillez exécuter la commande suivante pour l'installer :"
+    echo "sudo apt update && sudo apt install -y python3-pip"
+    exit 1
 fi
 
-# Vérifier si python3 est installé
-if command -v python3 > /dev/null 2>&1; then
-    echo "python3 est installé"
+# Vérifier si requests est installé
+if pip3 list | grep -q requests; then
+    echo "requests est installé"
 else
-    echo "python3 n'est pas installé"
+    echo "requests n'est pas installé. Veuillez exécuter la commande suivante pour l'installer :"
+    echo "pip3 install requests"
+    exit 1
 fi
 
-# Check if requests is installed
-if python3 -c "import requests" &>/dev/null; then
-    echo "requests is installed."
-else
-    echo "requests is not installed."
-fi
 
 # Check if netifaces is installed, if not, install it
 if ! python3 -c "import netifaces" &>/dev/null; then
