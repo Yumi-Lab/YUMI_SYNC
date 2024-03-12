@@ -20,6 +20,8 @@ uninstall: ## Uninstall YUMI_SYNC
 rebuildvenv: ## Rebuild virtual environment
 	@bash -c 'scripts/rebuildvenv.sh'
 
+update: ## Fetch latest changes
+	@git fetch && git pull
 
 help: ## Shows this help
 	@printf "YUMI_SYNC by Yumi-Lab (https://github.com/Yumi_lab)\n"
