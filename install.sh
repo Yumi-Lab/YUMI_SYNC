@@ -80,8 +80,7 @@ WantedBy=multi-user.target
 EOL
 
 if [ -f "$MOONRAKER_CONF" ]; then
-    MOONRAKER_CONF="/home/pi/printer_data/config/moonraker.conf"
-
+   
     # Check if the string [include yumi_sync.cfg] is already present in the file
     if ! grep -Fq '[include yumi_sync.cfg]' "$MOONRAKER_CONF"; then
         echo "Adding the string [include yumi_sync.cfg] to the moonraker.conf file..."
@@ -173,6 +172,19 @@ if [ -f "$MOONRAKER_CONF" ]; then
     else
         echo "Error: The YUMI_SYNC service failed to enable on boot."
     fi
+
+    # Cette commande change le propriétaire et le groupe récursivement
+    # de tous les fichiers et répertoires situés dans $USER_HOME/printer_data/config/
+    # pour qu'ils appartiennent à l'utilisateur 'pi' et au groupe 'pi'.
+    chown -R pi:pi $USER_HOME/printer_data/config/
+
+    # Vérification après le changement de propriétaire et de groupe
+    if [ "$(stat -c '%U:%G' $USER_HOME/printer_data/config/)" = "pi:pi" ]; then
+        echo "La vérification du changement de propriétaire et de groupe a réussi."
+    else
+        echo "Erreur : Le changement de propriétaire et de groupe n'a pas abouti."
+    fi
+
 
     echo "Installation completed."
 fi
