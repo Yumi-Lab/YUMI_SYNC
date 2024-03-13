@@ -1,6 +1,18 @@
 #!/bin/bash
 #set -x
 
+# Vérifiez si le script est exécuté avec sudo et déterminez l'utilisateur réel
+if [ ! -z "$SUDO_USER" ]; then
+    REAL_USER="$SUDO_USER"
+else
+    REAL_USER="$(whoami)"
+fi
+echo "Utilisateur réel: $REAL_USER"
+
+# Utilisez getent pour obtenir le chemin du répertoire personnel de l'utilisateur réel
+USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+echo "Répertoire personnel de l'utilisateur: $USER_HOME"
+
 # Define paths for the script, the systemd service file, and the moonraker.conf file
 SCRIPT_PATH="/home/pi/YUMI_SYNC/yumi_sync.py"
 SERVICE_PATH="/etc/systemd/system/yumi_sync.service"
