@@ -10,6 +10,31 @@ MOONRAKER_CONF_FOLDER="/home/pi/printer_data/config"
 INSTALL_SCRIPT_PATH="/home/pi/YUMI_SYNC/install.sh"
 VIRTUALENV_PATH="/home/pi/YUMI_SYNC/virtualenv"
 
+# check if yumi_sync.cfg exist, delete if exist, and create a new one
+    if [ -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
+        echo "The file /home/pi/printer_data/config/yumi_sync.cfg was already created. Deleting it..."
+        rm /home/pi/printer_data/config/yumi_sync.cfg
+    else
+        echo "The file /home/pi/printer_data/config/yumi_sync.cfg was not found. Creating it..."
+    fi
+
+    cat > /home/pi/printer_data/config/yumi_sync.cfg <<EOF
+[update_manager yumi_sync]
+type: git_repo
+path: ~/YUMI_SYNC
+origin: https://github.com/Yumi-Lab/YUMI-SYNC.git
+primary_branch: main
+managed_services: yumi_sync
+install_script: $INSTALL_SCRIPT_PATH
+EOF
+
+    # check if yumi_sync.cfg was created successfully
+    if [ -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
+        echo "The file /home/pi/printer_data/config/yumi_sync.cfg has been created successfully."
+    else
+        echo "Error: The file /home/pi/printer_data/config/yumi_sync.cfg was not created."
+    fi
+
 # Create and activate the virtual environment using virtualenv
 if [ ! -d "$VIRTUALENV_PATH" ]; then
     echo "Creating virtual environment..."
@@ -80,31 +105,6 @@ if [ -f "$MOONRAKER_CONF" ]; then
         fi
     else
         echo "The string [include yumi_sync.cfg] is already present in the moonraker.conf file."
-    fi
-
-    # check if yumi_sync.cfg exist, delete if exist, and create a new one
-    if [ -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
-        echo "The file /home/pi/printer_data/config/yumi_sync.cfg was already created. Deleting it..."
-        rm /home/pi/printer_data/config/yumi_sync.cfg
-    else
-        echo "The file /home/pi/printer_data/config/yumi_sync.cfg was not found. Creating it..."
-    fi
-
-    cat > /home/pi/printer_data/config/yumi_sync.cfg <<EOF
-[update_manager yumi_sync]
-type: git_repo
-path: ~/YUMI_SYNC
-origin: https://github.com/Yumi-Lab/YUMI-SYNC.git
-primary_branch: main
-managed_services: yumi_sync
-install_script: $INSTALL_SCRIPT_PATH
-EOF
-
-    # check if yumi_sync.cfg was created successfully
-    if [ -f /home/pi/printer_data/config/yumi_sync.cfg ]; then
-        echo "The file /home/pi/printer_data/config/yumi_sync.cfg has been created successfully."
-    else
-        echo "Error: The file /home/pi/printer_data/config/yumi_sync.cfg was not created."
     fi
 
     # give moonraker permitted to restart service
