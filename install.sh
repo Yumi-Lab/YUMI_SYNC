@@ -8,14 +8,14 @@ REPO_DIR="/home/pi/YUMI_SYNC"
 MOONRAKER_CONF="/home/pi/printer_data/config/moonraker.conf"
 MOONRAKER_CONF_FOLDER="/home/pi/printer_data/config"
 INSTALL_SCRIPT_PATH="/home/pi/YUMI_SYNC/install.sh"
-VENV_PATH="/home/pi/YUMI_SYNC/venv"
+VIRTUALENV_PATH="/home/pi/YUMI_SYNC/virtualenv"
 
-# Create and activate the virtual environment
-if [ ! -d "$VENV_PATH" ]; then
+# Create and activate the virtual environment using virtualenv
+if [ ! -d "$VIRTUALENV_PATH" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv "$VENV_PATH"
+    virtualenv -p python3 "$VIRTUALENV_PATH"
 fi
-source "$VENV_PATH/bin/activate"
+source "$VIRTUALENV_PATH/bin/activate"
 
 # Ensure the script Python is executable
 sudo chmod +x "$SCRIPT_PATH"
@@ -45,7 +45,7 @@ cat > "$SERVICE_PATH" <<EOL
 Description=Yumi Sync Service
 
 [Service]
-ExecStart=$VENV_PATH/bin/python $SCRIPT_PATH
+ExecStart=$VIRTUALENV_PATH/bin/python $SCRIPT_PATH
 WorkingDirectory=/home/pi/YUMI_SYNC
 Restart=always
 User=pi
