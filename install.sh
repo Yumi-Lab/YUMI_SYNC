@@ -176,7 +176,7 @@ if [ -f "$MOONRAKER_CONF" ]; then
     # Cette commande change le propriétaire et le groupe récursivement
     # de tous les fichiers et répertoires situés dans $USER_HOME/printer_data/config/
     # pour qu'ils appartiennent à l'utilisateur 'pi' et au groupe 'pi'.
-    chown -R pi:pi $USER_HOME/printer_data/config/
+    sudo chown -R pi:pi $USER_HOME/printer_data/config/
 
     # Vérification après le changement de propriétaire et de groupe
     if [ "$(stat -c '%U:%G' $USER_HOME/printer_data/config/)" = "pi:pi" ]; then
