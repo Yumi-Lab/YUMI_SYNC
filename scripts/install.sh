@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 # Debug
-set -x
+#set -x
 
 PKGLIST="python3 python3-venv"
 
