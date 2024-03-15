@@ -97,10 +97,10 @@ add_moonraker_update() {
 [update_manager yumi_sync]
 type: git_repo
 path: ~/YUMI_SYNC
-origin: https://github.com/Yumi-Lab/YUMI-SYNC.git
+origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
 primary_branch: main
 managed_services: yumi_sync
-install_script: $INSTALL_SCRIPT_PATH
+install_script: scripts/install.sh
 EOF
     chown "${BASE_USER}":"${BASE_USER}" "/home/${BASE_USER}/printer_data/config/yumi_sync.cfg"
     else
