@@ -91,25 +91,16 @@ install_service() {
 }
 
 add_moonraker_update() {
-
-    if [[ -d "/home/${BASE_USER}/printer_data/config" ]]; then
-    cat > "/home/${BASE_USER}/printer_data/config/yumi_sync.cfg" <<EOF
-[update_manager yumi_sync]
-type: git_repo
-path: ~/YUMI_SYNC
-origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
-primary_branch: main
-managed_services: yumi_sync
-install_script: scripts/install.sh
-EOF
-    chown "${BASE_USER}":"${BASE_USER}" "/home/${BASE_USER}/printer_data/config/yumi_sync.cfg"
-    else
-        printf "WARN: could not install update entry...\n"
-        return
+    local config_dir conf_file_src conf_file_ln
+    config_dir="/home/${BASE_USER}/printer_data/config"
+    conf_file_src="${PWD}/yumi_sync-update.conf"
+    conf_file_ln="${config_dir}/yumi_sync-update.conf"
+    if [[ -d "${config_dir}" ]]; then
+        ln -s "${conf_file_src}" "${conf_file_ln}"
     fi
 
-    if [[ -f "/home/${BASE_USER}/printer_data/config/moonraker.conf" ]]; then
-        echo "[include yumi_sync.cfg]" >> "/home/${BASE_USER}/printer_data/config/moonraker.conf"
+    if [[ -f "${config_dir}/moonraker.conf" ]]; then
+        echo "[include yumi_sync.cfg]" >> "${config_dir}/moonraker.conf"
     fi
 }
 
