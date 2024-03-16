@@ -114,20 +114,15 @@ EOF
 }
 
 generate_moonraker_asvc() {
-    cat > "/home/${BASE_USER}/printer_data/moonraker.asvc" << EOF
-klipper_mcu
-webcamd
-MoonCord
-KlipperScreen
-moonraker-telegram-bot
-moonraker-obico
-sonar
-crowsnest
-octoeverywhere
-ratos-configurator
-yumi_sync
-EOF
-    chown "${BASE_USER}":"${BASE_USER}" "/home/${BASE_USER}/printer_data/moonraker.asvc"
+    local asset asvc
+    asset="/home/${BASE_USER}/moonraker/moonraker/assets/default_allowed_services"
+    asvc="/home/${BASE_USER}/printer_data/moonraker.asvc"
+    if [[ -f "${asset}" ]]; then
+        printf "Moonraker Repository found ...\n"
+        cat "${asset}" > "${asvc}"
+        echo "yumi_sync" >> "${asvc}"
+        chown "${BASE_USER}":"${BASE_USER}" "${asvc}"
+    fi
 }
 
 if [[ "${BASH_SOURCE[0]}" = "${0}" ]]; then
