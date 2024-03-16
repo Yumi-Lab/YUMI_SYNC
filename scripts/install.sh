@@ -100,7 +100,7 @@ add_moonraker_update() {
     fi
 
     if [[ -f "${config_dir}/moonraker.conf" ]]; then
-        echo "[include yumi_sync.cfg]" >> "${config_dir}/moonraker.conf"
+        echo "[include yumi_sync-update.conf]" >> "${config_dir}/moonraker.conf"
     fi
 }
 
