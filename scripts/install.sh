@@ -68,6 +68,7 @@ After=network-online.target
 
 [Service]
 Type=simple
+ExecStartPre=/bin/sleep 240
 ExecStart=${PWD}/venv/bin/python ${PWD}/yumi_sync/yumi_sync.py
 WorkingDirectory=/home/${BASE_USER}/YUMI_SYNC
 Restart=always
