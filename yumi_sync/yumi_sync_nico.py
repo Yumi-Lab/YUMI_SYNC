@@ -4,7 +4,6 @@
 import os
 import time
 import requests
-import hashlib
 import json
 from datetime import datetime, timedelta
 import netifaces
@@ -41,14 +40,13 @@ file_to_monitor = '/home/pi/printer_data/config/printer.cfg'
 state_file_path = '/home/pi/monitoring_state.json'
 server_url = "http://adb528.online-server.cloud/route_testing"
 
-previous_hash = None
+previous_mod_time = None
 
-def calculate_file_hash(file_path):
+def get_file_mod_time(file_path):
     try:
-        with open(file_path, 'rb') as file:
-            return hashlib.md5(file.read()).hexdigest()
+        return os.path.getmtime(file_path)
     except Exception as e:
-        print(f"Error calculating file hash: {e}")
+        print(f"Error getting file modification time: {e}")
         return None
 
 def send_file_to_server(file_path, timestamp, mac_address):
@@ -56,7 +54,8 @@ def send_file_to_server(file_path, timestamp, mac_address):
         with open(file_path, 'rb') as file:
             files = {'file': (os.path.basename(file_path), file)}
             data = {
-                'timestamp': timestamp,                'mac_address': mac_address
+                'timestamp': timestamp,
+                'mac_address': mac_address
             }
             response = requests.post(server_url, data=data, files=files)
 
@@ -66,17 +65,6 @@ def send_file_to_server(file_path, timestamp, mac_address):
                 print(f"Error sending data to the server. Status code: {response.status_code}")
     except Exception as e:
         print(f"Error sending data to the server: {e}")
-        
-def load_previous_hash():
-    try:
-        with open(state_file_path, 'r') as state_file:
-            return state_file.read().strip()
-    except FileNotFoundError:
-        return None
-
-def save_current_hash(current_hash):
-    with open(state_file_path, 'w') as state_file:
-        state_file.write(current_hash)
 
 def load_last_sent_date():
     try:
@@ -100,17 +88,16 @@ def save_last_sent_date(date):
 
 while True:
     try:
-        current_hash = calculate_file_hash(file_to_monitor)
-        if current_hash is not None and current_hash != previous_hash:
+        current_mod_time = get_file_mod_time(file_to_monitor)
+        if current_mod_time is not None and current_mod_time != previous_mod_time:
             print("The file has changed. Sending data to the server...")
             timestamp = time.strftime("%Y-%m-%d-%H-%M-%S")
             mac_address = get_mac_address(active_interface)
             if mac_address:
                 send_file_to_server(file_to_monitor, timestamp, mac_address)
-                save_current_hash(current_hash)
             else:
                 print("Failed to get the MAC address.")
-        previous_hash = current_hash
+        previous_mod_time = current_mod_time
 
         last_sent_date = load_last_sent_date()
         if last_sent_date is None or (datetime.now() - datetime.strptime(last_sent_date, "%Y-%m-%d")).days >= 30:
@@ -119,7 +106,6 @@ while True:
             mac_address = get_mac_address(active_interface)
             if mac_address:
                 send_file_to_server(file_to_monitor, timestamp, mac_address)
-                save_current_hash(current_hash)
                 save_last_sent_date(time.strftime("%Y-%m-%d"))
             else:
                 print("Failed to get the MAC address.")
