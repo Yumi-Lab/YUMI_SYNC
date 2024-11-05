@@ -13,8 +13,8 @@ sudo systemctl disable yumi_sync.service
 rm -f "$SERVICE_PATH"
 
 # Remove the YUMI_SYNC repository directory
-if [ -d "${HOME}/YUMI_SYNC" ]; then
-    rm -rfv "${HOME}/YUMI_SYNC"
+if [ -d "/home/pi/YUMI_SYNC" ]; then
+    rm -rfv "/home/pi/YUMI_SYNC"
 fi
 
 # Remove the moonraker.conf config-sync-git if it exists

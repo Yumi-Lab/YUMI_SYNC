@@ -9,6 +9,8 @@ import json
 from datetime import datetime, timedelta
 import netifaces
 
+log_file_path = '/var/log/yumi_sync.log'
+
 def get_active_interface():
     try:
         default_gateway = netifaces.gateways()['default']
@@ -51,22 +53,58 @@ def calculate_file_hash(file_path):
         print(f"Error calculating file hash: {e}")
         return None
 
+def log_sync_attempt(status, file_name, error_message=None):
+    """Log the sync attempt to yumi_sync.log with date-time, file name, and status (OK or ERROR)."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    message = f"{timestamp} - {file_name} - {status}"
+    if error_message:
+        message += f" - {error_message}"
+    
+    with open(log_file_path, 'a') as log_file:
+        log_file.write(message + "\n")
+
+def clean_old_log_entries():
+    """Remove log entries older than 3 months."""
+    if not os.path.exists(log_file_path):
+        return
+
+    cutoff_date = datetime.now() - timedelta(days=90)
+    with open(log_file_path, 'r') as log_file:
+        lines = log_file.readlines()
+
+    with open(log_file_path, 'w') as log_file:
+        for line in lines:
+            # Extract the date from the log entry
+            try:
+                entry_date = datetime.strptime(line.split(" - ")[0], "%Y-%m-%d %H:%M:%S")
+                if entry_date >= cutoff_date:
+                    log_file.write(line)
+            except (IndexError, ValueError):
+                # If there's an issue with parsing, skip the line
+                continue
+
 def send_file_to_server(file_path, timestamp, mac_address):
     try:
         with open(file_path, 'rb') as file:
             files = {'file': (os.path.basename(file_path), file)}
             data = {
-                'timestamp': timestamp,                'mac_address': mac_address
+                'timestamp': timestamp,
+                'mac_address': mac_address
             }
             response = requests.post(server_url, data=data, files=files)
 
             if response.status_code == 200:
+                log_sync_attempt("OK", file_path)
                 print("Data successfully sent to server.")
             else:
-                print(f"Error sending data to the server. Status code: {response.status_code}")
+                error_message = f"Server responded with status code {response.status_code}"
+                log_sync_attempt("ERROR", file_path, error_message)
+                print(f"Error sending data to the server: {error_message}")
     except Exception as e:
-        print(f"Error sending data to the server: {e}")
-        
+        error_message = str(e)
+        log_sync_attempt("ERROR", file_path, error_message)
+        print(f"Error sending data to the server: {error_message}")
+
 def load_previous_hash():
     try:
         with open(state_file_path, 'r') as state_file:
@@ -98,6 +136,9 @@ def save_last_sent_date(date):
     with open(state_file_path, 'w') as state_file:
         json.dump(state_data, state_file)
 
+# Clean old log entries before starting
+clean_old_log_entries()
+
 while True:
     try:
         current_hash = calculate_file_hash(file_to_monitor)
@@ -124,7 +165,8 @@ while True:
             else:
                 print("Failed to get the MAC address.")
 
-        time.sleep(36000)
+        # Change the sleep time to one hour (3600 seconds)
+        time.sleep(3600)
     except KeyboardInterrupt:
         print("Monitoring stopped.")
         break
