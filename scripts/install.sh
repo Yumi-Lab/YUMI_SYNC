@@ -4,11 +4,13 @@ set -e
 #set -x
 
 PKGLIST="python3 python3-venv"
-
 SERVICE_FILE_PATH="/etc/systemd/system/yumi_sync.service"
+INSTALL_DIR="/home/pi/YUMI_SYNC"  # Répertoire d'installation par défaut
 
+# Détection de l'utilisateur de base
 [[ -n $BASE_USER ]] || BASE_USER="$(whoami)"
 [[ "${BASE_USER}" = "root" ]] && BASE_USER="${SUDO_USER}"
+[[ -n "${BASE_USER}" ]] || { echo "Error: BASE_USER is not defined."; exit 1; }
 
 main() {
     local rebuildvenv
@@ -42,19 +44,25 @@ create_virtualenv() {
     local py_bin
     py_bin="$(which python3)"
     printf "Creating virtual environment ...\n"
-    "${py_bin}" -m venv "${PWD}/venv"
+    "${py_bin}" -m venv "${INSTALL_DIR}/venv"
     printf "Install requirements ...\n"
+    
+    if [[ ! -f "${INSTALL_DIR}/requirements.txt" ]]; then
+        echo "requirements.txt not found, skipping package installation."
+        return
+    fi
+
     if [[ "$(uname -m)" =~ armv[67]l ]]; then
-        "${PWD}"/venv/bin/pip install --extra-index-url https://www.piwheels.org/simple -r "${PWD}/requirements.txt"
+        "${INSTALL_DIR}/venv/bin/pip" install --extra-index-url https://www.piwheels.org/simple -r "${INSTALL_DIR}/requirements.txt"
     else
-        "${PWD}"/venv/bin/pip install -r "${PWD}/requirements.txt"
+        "${INSTALL_DIR}/venv/bin/pip" install -r "${INSTALL_DIR}/requirements.txt"
     fi
 }
 
 rebuild_venv() {
-    if [[ -d "${PWD}/venv" ]]; then
+    if [[ -d "${INSTALL_DIR}/venv" ]]; then
         printf "Removing old virtual environment...\n"
-        rm -rf "${PWD}/venv"
+        rm -rf "${INSTALL_DIR}/venv"
     fi
     create_virtualenv
 }
@@ -70,16 +78,14 @@ After=network-online.target
 Type=simple
 # Commenter cette ligne si elle provoque un délai ou réduisez le temps de sommeil
 # ExecStartPre=/bin/sleep 10
-ExecStart=/home/pi/YUMI_SYNC/venv/bin/python /home/pi/YUMI_SYNC/yumi_sync/yumi_sync.py
-WorkingDirectory=/home/pi/YUMI_SYNC
+ExecStart=${INSTALL_DIR}/venv/bin/python ${INSTALL_DIR}/yumi_sync/yumi_sync.py
+WorkingDirectory=${INSTALL_DIR}
 Restart=always
-User=pi
+User=${BASE_USER}
 TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
-
-
 EOF
 }
 
@@ -88,23 +94,28 @@ install_service() {
     create_service_file
     printf "Enable Yumi Sync Service ...\n"
     systemctl enable "$(basename "${SERVICE_FILE_PATH}")"
-    if [[ ! -d  /proc ]]; then
-        printf "Start Yumi Sync Service ...\n"
-        systemctl start "$(basename "${SERVICE_FILE_PATH}")"
-    fi
+    printf "Start Yumi Sync Service ...\n"
+    systemctl start "$(basename "${SERVICE_FILE_PATH}")"
 }
 
 add_moonraker_update() {
     local config_dir conf_file_src conf_file_ln
     config_dir="/home/${BASE_USER}/printer_data/config"
-    conf_file_src="${PWD}/yumi_sync-update.conf"
+    conf_file_src="${INSTALL_DIR}/yumi_sync-update.conf"
     conf_file_ln="${config_dir}/yumi_sync-update.conf"
+    
     if [[ -d "${config_dir}" ]]; then
-        ln -s "${conf_file_src}" "${conf_file_ln}"
+        if [[ -L "${conf_file_ln}" ]]; then
+            echo "Link already exists: ${conf_file_ln}"
+        else
+            ln -s "${conf_file_src}" "${conf_file_ln}"
+        fi
     fi
 
     if [[ -f "${config_dir}/moonraker.conf" ]]; then
-        echo "[include yumi_sync-update.conf]" >> "${config_dir}/moonraker.conf"
+        if ! grep -q "\[include yumi_sync-update.conf\]" "${config_dir}/moonraker.conf"; then
+            echo "[include yumi_sync-update.conf]" >> "${config_dir}/moonraker.conf"
+        fi
     fi
 }
 
@@ -112,14 +123,16 @@ generate_moonraker_asvc() {
     local asset asvc
     asset="/home/${BASE_USER}/moonraker/moonraker/assets/default_allowed_services"
     asvc="/home/${BASE_USER}/printer_data/moonraker.asvc"
+    
     if [[ -f "${asset}" ]]; then
         printf "Moonraker Repository found ...\n"
         cat "${asset}" > "${asvc}"
         echo "yumi_sync" >> "${asvc}"
-        chown "${BASE_USER}":"${BASE_USER}" "${asvc}"
+        chown "${BASE_USER}:${BASE_USER}" "${asvc}"
     fi
 }
 
+# Lancement du script principal
 if [[ "${BASH_SOURCE[0]}" = "${0}" ]]; then
     main "${@}"
 fi
