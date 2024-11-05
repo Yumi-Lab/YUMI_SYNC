@@ -68,14 +68,17 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sleep 240
-ExecStart=${PWD}/venv/bin/python ${PWD}/yumi_sync/yumi_sync.py
-WorkingDirectory=/home/${BASE_USER}/YUMI_SYNC
+# Commenter cette ligne si elle provoque un délai ou réduisez le temps de sommeil
+# ExecStartPre=/bin/sleep 10
+ExecStart=/home/pi/YUMI_SYNC/venv/bin/python /home/pi/YUMI_SYNC/yumi_sync/yumi_sync.py
+WorkingDirectory=/home/pi/YUMI_SYNC
 Restart=always
-User=${BASE_USER}
+User=pi
+TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
+
 
 EOF
 }
