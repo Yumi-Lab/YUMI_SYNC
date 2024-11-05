@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SERVICE_PATH="/etc/systemd/system/yumi_sync.service"
-MOONRAKER_CONF="${HOME}/printer_data/config/moonraker.conf"
+MOONRAKER_CONF="/home/pi/printer_data/config/moonraker.conf"
 
 # Stop the service if it is running
 sudo systemctl stop yumi_sync.service
