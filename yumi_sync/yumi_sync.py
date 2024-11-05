@@ -124,7 +124,7 @@ while True:
             else:
                 print("Failed to get the MAC address.")
 
-        time.sleep(5)
+        time.sleep(36000)
     except KeyboardInterrupt:
         print("Monitoring stopped.")
         break
