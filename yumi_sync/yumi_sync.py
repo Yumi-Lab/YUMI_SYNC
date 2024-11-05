@@ -41,7 +41,7 @@ else:
 
 file_to_monitor = '/home/pi/printer_data/config/printer.cfg'
 state_file_path = '/home/pi/monitoring_state.json'
-server_url = "http://adb528.online-server.cloud/route_testing"
+server_url = "http://sync.yumi-lab.com/route_testing"
 
 previous_hash = None
 
