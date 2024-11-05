@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timedelta
 import netifaces
 
-log_file_path = '/var/log/yumi_sync.log'
+log_file_path = '/home/pi/YUMI_SYNC//yumi_sync.log'
 
 def get_active_interface():
     try:
