@@ -1,12 +1,13 @@
 #!/bin/bash
 
-# Update system and install dependencies
-sudo apt-get update
-sudo apt-get install -y python3-pip python3-dev libffi-dev libssl-dev
+# Create virtual environment
+VENV_DIR="${PWD}/venv"
+python3 -m venv ${VENV_DIR}
+source ${VENV_DIR}/bin/activate
 
-# Install Python packages
-pip3 install --upgrade pip
-pip3 install requests netifaces python-inotify
+# Install Python packages in venv
+pip install --upgrade pip
+pip install requests netifaces python-inotify
 
 # Create systemd service
 sudo tee /etc/systemd/system/yumi-sync.service > /dev/null <<EOL
@@ -15,7 +16,7 @@ Description=YUMI Sync Service
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 ${PWD}/yumi_sync.py
+ExecStart=${VENV_DIR}/bin/python ${PWD}/yumi_sync.py
 Restart=always
 Environment=SYNC_SERVER=https://sync.yumi-lab.com/route_testing
 Environment=MONITOR_FILE=/home/pi/printer_data/config/printer.cfg
