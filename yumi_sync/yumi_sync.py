@@ -1,13 +1,17 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import os
 import time
 import requests
-import hashlib
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import netifaces
+import inotify.adapters  # Nécessite le paquet python-inotify
+
+log_file_path = '/home/pi/YUMI_SYNC/yumi_sync.log'
+file_to_monitor = '/home/pi/printer_data/config/printer.cfg'
+state_file_path = '/home/pi/monitoring_state.json'
+server_url = "http://sync.yumi-lab.com/route_testing"
+
+log_file_path = '/home/pi/YUMI_SYNC//yumi_sync.log'
 
 log_file_path = '/home/pi/YUMI_SYNC//yumi_sync.log'
 
@@ -27,6 +31,8 @@ def get_mac_address(interface_name):
     except KeyError:
         return None
 
+<<<<<<< HEAD
+=======
 active_interface = get_active_interface()
 
 if active_interface:
@@ -83,14 +89,22 @@ def clean_old_log_entries():
                 # If there's an issue with parsing, skip the line
                 continue
 
+<<<<<<< Updated upstream
+=======
+>>>>>>> 553f62786cd01763c31846fe30a0a50e1c7e908d
+>>>>>>> Stashed changes
 def send_file_to_server(file_path, timestamp, mac_address):
     try:
         with open(file_path, 'rb') as file:
             files = {'file': (os.path.basename(file_path), file)}
+<<<<<<< HEAD
+            data = {'timestamp': timestamp, 'mac_address': mac_address}
+=======
             data = {
                 'timestamp': timestamp,
                 'mac_address': mac_address
             }
+>>>>>>> 553f62786cd01763c31846fe30a0a50e1c7e908d
             response = requests.post(server_url, data=data, files=files)
 
             if response.status_code == 200:
@@ -101,6 +115,12 @@ def send_file_to_server(file_path, timestamp, mac_address):
                 log_sync_attempt("ERROR", file_path, error_message)
                 print(f"Error sending data to the server: {error_message}")
     except Exception as e:
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+        print(f"Error sending data to the server: {e}")
+=======
+>>>>>>> Stashed changes
         error_message = str(e)
         log_sync_attempt("ERROR", file_path, error_message)
         print(f"Error sending data to the server: {error_message}")
@@ -115,6 +135,7 @@ def load_previous_hash():
 def save_current_hash(current_hash):
     with open(state_file_path, 'w') as state_file:
         state_file.write(current_hash)
+>>>>>>> 553f62786cd01763c31846fe30a0a50e1c7e908d
 
 def load_last_sent_date():
     try:
@@ -130,12 +151,25 @@ def save_last_sent_date(date):
             state_data = json.load(state_file)
     except (FileNotFoundError, json.JSONDecodeError):
         state_data = {}
-    
+
     state_data['last_sent_date'] = date
 
     with open(state_file_path, 'w') as state_file:
         json.dump(state_data, state_file)
 
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+def monitor_file(file_path):
+    i = inotify.adapters.Inotify()
+    i.add_watch(file_path)
+    
+    for event in i.event_gen(yield_nones=False):
+        (_, event_type, _, _) = event
+        if 'IN_MODIFY' in event_type:  # Si le fichier a été modifié
+            print(f"The file {file_path} has been modified. Sending data to the server...")
+=======
+>>>>>>> Stashed changes
 # Clean old log entries before starting
 clean_old_log_entries()
 
@@ -144,31 +178,34 @@ while True:
         current_hash = calculate_file_hash(file_to_monitor)
         if current_hash is not None and current_hash != previous_hash:
             print("The file has changed. Sending data to the server...")
+>>>>>>> 553f62786cd01763c31846fe30a0a50e1c7e908d
             timestamp = time.strftime("%Y-%m-%d-%H-%M-%S")
-            mac_address = get_mac_address(active_interface)
+            mac_address = get_mac_address(get_active_interface())
             if mac_address:
-                send_file_to_server(file_to_monitor, timestamp, mac_address)
-                save_current_hash(current_hash)
+                send_file_to_server(file_path, timestamp, mac_address)
             else:
                 print("Failed to get the MAC address.")
-        previous_hash = current_hash
 
-        last_sent_date = load_last_sent_date()
-        if last_sent_date is None or (datetime.now() - datetime.strptime(last_sent_date, "%Y-%m-%d")).days >= 30:
-            print("Sending the file as it has been 30 days or more...")
-            timestamp = time.strftime("%Y-%m-%d-%H-%M-%S")
-            mac_address = get_mac_address(active_interface)
-            if mac_address:
-                send_file_to_server(file_to_monitor, timestamp, mac_address)
-                save_current_hash(current_hash)
+            last_sent_date = load_last_sent_date()
+            if last_sent_date is None or (datetime.now() - datetime.strptime(last_sent_date, "%Y-%m-%d")).days >= 30:
+                print("Sending the file as it has been 30 days or more...")
+                send_file_to_server(file_path, timestamp, mac_address)
                 save_last_sent_date(time.strftime("%Y-%m-%d"))
-            else:
-                print("Failed to get the MAC address.")
 
+<<<<<<< Updated upstream
         # Change the sleep time to one hour (3600 seconds)
         time.sleep(3600)
+=======
+<<<<<<< HEAD
+if __name__ == "__main__":
+    try:
+        monitor_file(file_to_monitor)
+=======
+        # Change the sleep time to one hour (3600 seconds)
+        time.sleep(3600)
+>>>>>>> 553f62786cd01763c31846fe30a0a50e1c7e908d
+>>>>>>> Stashed changes
     except KeyboardInterrupt:
         print("Monitoring stopped.")
-        break
     except Exception as e:
         print(f"Error in monitoring: {e}")
