@@ -1,5 +1,9 @@
 #!/bin/bash
 
+#install python-inotify
+sudo apt update
+sudo apt install python3-inotify -y
+
 # Create virtual environment
 VENV_DIR="${PWD}/venv"
 python3 -m venv ${VENV_DIR}
@@ -7,7 +11,10 @@ source ${VENV_DIR}/bin/activate
 
 # Install Python packages in venv
 pip install --upgrade pip
-pip install requests netifaces python-inotify
+pip install requests netifaces #python-inotify
+
+
+
 
 # Create systemd service
 sudo tee /etc/systemd/system/yumi-sync.service > /dev/null <<EOL
