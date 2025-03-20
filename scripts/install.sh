@@ -1,9 +1,5 @@
 #!/bin/bash
 
-#install python-inotify
-sudo apt update
-sudo apt install python3-inotify -y
-
 # Create virtual environment
 VENV_DIR="${PWD}/venv"
 python3 -m venv ${VENV_DIR}
@@ -11,7 +7,7 @@ source ${VENV_DIR}/bin/activate
 
 # Install Python packages in venv
 pip install --upgrade pip
-pip install requests netifaces #python-inotify
+pip install requests netifaces inotify-simple #python-inotify
 
 
 
@@ -38,5 +34,13 @@ EOL
 sudo systemctl daemon-reload
 sudo systemctl enable yumi-sync
 sudo systemctl start yumi-sync
+
+# Vérification de l'état du service
+if systemctl is-active --quiet yumi-sync; then
+    echo "✅ Installation complète. Service YUMI_SYNC en cours d'exécution."
+else
+    echo "❌ Erreur : Le service YUMI_SYNC ne s'est pas lancé correctement."
+    journalctl -u yumi-sync --no-pager -n 20  # Afficher les 20 dernières erreurs
+fi
 
 echo "Installation complete. Service is running."
