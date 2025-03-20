@@ -1,9 +1,13 @@
 #!/bin/bash
 
 # Create virtual environment
-VENV_DIR="${PWD}/venv"
-python3 -m venv ${VENV_DIR}
-source ${VENV_DIR}/bin/activate
+#VENV_DIR="${PWD}/venv"
+#python3 -m venv ${VENV_DIR}
+#source ${VENV_DIR}/bin/activate
+cd /home/pi/YUMI_SYNC
+sudo rm -rf venv
+python3 -m venv venv
+source venv/bin/activate
 
 # Install Python packages in venv
 pip install --upgrade pip
@@ -19,7 +23,7 @@ Description=YUMI Sync Service
 After=network.target
 
 [Service]
-ExecStart=${VENV_DIR}/bin/python ${PWD}/yumi_sync.py
+ExecStart=/home/pi/YUMI_SYNC/venv/bin/python /home/pi/YUMI_SYNC/yumi_sync//yumi_sync.py
 Restart=always
 Environment=SYNC_SERVER=https://sync.yumi-lab.com/route_testing
 Environment=MONITOR_FILE=/home/pi/printer_data/config/printer.cfg
@@ -34,6 +38,32 @@ EOL
 sudo systemctl daemon-reload
 sudo systemctl enable yumi-sync
 sudo systemctl start yumi-sync
+
+cat <<EOL > /home/pi/printer_data/config/update_YUMI_SYNC.cfg
+# YUMI_SYNC update_manager entry 
+[update_manager YUMI_SYNC]
+type: git_repo
+path: ~/YUMI_SYNC
+origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
+primary_branch: main
+managed_services: YUMI_SYNC
+install_script: scripts/install.sh
+EOL
+
+sudo chmod 777 /home/pi/printer_data/config/update_YUMI_SYNC.cfg
+
+CONFIG_FILE="/home/pi/printer_data/config/moonraker.conf"
+INCLUDE_LINE="[include update_YUMI_SYNC.cfg]"
+
+# Vérifier si la ligne existe déjà
+if ! grep -Fxq "$INCLUDE_LINE" "$CONFIG_FILE"; then
+    echo "$INCLUDE_LINE" | sudo tee -a "$CONFIG_FILE" > /dev/null
+    echo "Ligne ajoutée à $CONFIG_FILE"
+else
+    echo "La ligne existe déjà dans $CONFIG_FILE"
+fi
+echo "YUMI_SYNC" | sudo tee -a /home/pi/printer_data/moonraker.asvc
+
 
 # Vérification de l'état du service
 if systemctl is-active --quiet yumi-sync; then
