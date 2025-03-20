@@ -3,6 +3,7 @@ set -e
 # Debug
 #set -x
 
+<<<<<<< HEAD
 PKGLIST="python3 python3-venv"
 SERVICE_FILE_PATH="/etc/systemd/system/yumi_sync.service"
 INSTALL_DIR="/home/pi/YUMI_SYNC"  # Répertoire d'installation par défaut
@@ -11,6 +12,23 @@ INSTALL_DIR="/home/pi/YUMI_SYNC"  # Répertoire d'installation par défaut
 [[ -n $BASE_USER ]] || BASE_USER="$(whoami)"
 [[ "${BASE_USER}" = "root" ]] && BASE_USER="${SUDO_USER}"
 [[ -n "${BASE_USER}" ]] || { echo "Error: BASE_USER is not defined."; exit 1; }
+=======
+# Create virtual environment
+#VENV_DIR="${PWD}/venv"
+#python3 -m venv ${VENV_DIR}
+#source ${VENV_DIR}/bin/activate
+cd /home/pi/YUMI_SYNC
+sudo rm -rf venv
+python3 -m venv venv
+source venv/bin/activate
+
+# Install Python packages in venv
+pip install --upgrade pip
+pip install requests netifaces inotify-simple #python-inotify
+
+
+
+>>>>>>> d71f1140defb08cf579e9db051a77553413b926d
 
 main() {
     local rebuildvenv
@@ -75,11 +93,15 @@ Requires=network-online.target
 After=network-online.target
 
 [Service]
+<<<<<<< HEAD
 Type=simple
 # Commenter cette ligne si elle provoque un délai ou réduisez le temps de sommeil
 # ExecStartPre=/bin/sleep 10
 ExecStart=${INSTALL_DIR}/venv/bin/python ${INSTALL_DIR}/yumi_sync/yumi_sync.py
 WorkingDirectory=${INSTALL_DIR}
+=======
+ExecStart=/home/pi/YUMI_SYNC/venv/bin/python /home/pi/YUMI_SYNC/yumi_sync//yumi_sync.py
+>>>>>>> d71f1140defb08cf579e9db051a77553413b926d
 Restart=always
 User=${BASE_USER}
 TimeoutStartSec=300
@@ -98,6 +120,7 @@ install_service() {
     systemctl start "$(basename "${SERVICE_FILE_PATH}")"
 }
 
+<<<<<<< HEAD
 add_moonraker_update() {
     local config_dir conf_file_src conf_file_ln
     config_dir="/home/${BASE_USER}/printer_data/config"
@@ -136,3 +159,40 @@ generate_moonraker_asvc() {
 if [[ "${BASH_SOURCE[0]}" = "${0}" ]]; then
     main "${@}"
 fi
+=======
+cat <<EOL > /home/pi/printer_data/config/update_YUMI_SYNC.cfg
+# YUMI_SYNC update_manager entry 
+[update_manager YUMI_SYNC]
+type: git_repo
+path: ~/YUMI_SYNC
+origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
+primary_branch: main
+managed_services: YUMI_SYNC
+install_script: scripts/install.sh
+EOL
+
+sudo chmod 777 /home/pi/printer_data/config/update_YUMI_SYNC.cfg
+
+CONFIG_FILE="/home/pi/printer_data/config/moonraker.conf"
+INCLUDE_LINE="[include update_YUMI_SYNC.cfg]"
+
+# Vérifier si la ligne existe déjà
+if ! grep -Fxq "$INCLUDE_LINE" "$CONFIG_FILE"; then
+    echo "$INCLUDE_LINE" | sudo tee -a "$CONFIG_FILE" > /dev/null
+    echo "Ligne ajoutée à $CONFIG_FILE"
+else
+    echo "La ligne existe déjà dans $CONFIG_FILE"
+fi
+echo "YUMI_SYNC" | sudo tee -a /home/pi/printer_data/moonraker.asvc
+
+
+# Vérification de l'état du service
+if systemctl is-active --quiet yumi-sync; then
+    echo "✅ Installation complète. Service YUMI_SYNC en cours d'exécution."
+else
+    echo "❌ Erreur : Le service YUMI_SYNC ne s'est pas lancé correctement."
+    journalctl -u yumi-sync --no-pager -n 20  # Afficher les 20 dernières erreurs
+fi
+
+echo "Installation complete. Service is running."
+>>>>>>> d71f1140defb08cf579e9db051a77553413b926d
