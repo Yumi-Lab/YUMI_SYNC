@@ -120,21 +120,38 @@ add_moonraker_update() {
     fi
 }
 
-generate_moonraker_asvc() {
-    local asset asvc
-    asset="/home/${BASE_USER}/moonraker/moonraker/assets/default_allowed_services"
-    asvc="/home/${BASE_USER}/printer_data/moonraker.asvc"
-    
-    if [[ -f "${asset}" ]]; then
-        printf "Moonraker Repository found ...\n"
-        cat "${asset}" > "${asvc}"
-        echo "yumi_sync" >> "${asvc}"
-        chown "${BASE_USER}:${BASE_USER}" "${asvc}"
-    fi
+
+add_moonraker_update() {
+#update service moonraker
+cat <<EOL > /home/pi/printer_data/config/update_YUMI_SYNC.cfg
+# YUMI_SYNC update_manager entry 
+[update_manager YUMI_SYNC]
+type: git_repo
+path: ~/YUMI_SYNC
+origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
+primary_branch: main
+managed_services: YUMI_SYNC
+install_script: scripts/install.sh
+EOL
+
+sudo chmod 644 /home/pi/printer_data/config/update_YUMI_SYNC.cfg
 }
 
-# Lancement du script principal
-if [[ "${BASH_SOURCE[0]}" = "${0}" ]]; then
-    main "${@}"
-fi
+generate_moonraker_asvc() {
+    CONFIG_FILE="/home/pi/printer_data/config/moonraker.conf"
+    INCLUDE_LINE="[include update_YUMI_SYNC.cfg]"
+    
+    # Vérifier si la ligne existe déjà
+    if ! grep -Fxq "$INCLUDE_LINE" "$CONFIG_FILE"; then
+        echo "$INCLUDE_LINE" | sudo tee -a "$CONFIG_FILE" > /dev/null
+        echo "Ligne ajoutée à $CONFIG_FILE"
+    else
+        echo "La ligne existe déjà dans $CONFIG_FILE"
+    fi
+    echo "YUMI_SYNC" | sudo tee -a /home/pi/printer_data/moonraker.asvc
 
+    # Lancement du script principal
+    if [[ "${BASH_SOURCE[0]}" = "${0}" ]]; then
+        main "${@}"
+    fi
+}
