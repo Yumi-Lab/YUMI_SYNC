@@ -3,7 +3,7 @@ set -e
 # Debug
 #set -x
 
-<<<<<<< HEAD
+
 PKGLIST="python3 python3-venv"
 SERVICE_FILE_PATH="/etc/systemd/system/yumi_sync.service"
 INSTALL_DIR="/home/pi/YUMI_SYNC"  # Répertoire d'installation par défaut
@@ -12,23 +12,6 @@ INSTALL_DIR="/home/pi/YUMI_SYNC"  # Répertoire d'installation par défaut
 [[ -n $BASE_USER ]] || BASE_USER="$(whoami)"
 [[ "${BASE_USER}" = "root" ]] && BASE_USER="${SUDO_USER}"
 [[ -n "${BASE_USER}" ]] || { echo "Error: BASE_USER is not defined."; exit 1; }
-=======
-# Create virtual environment
-#VENV_DIR="${PWD}/venv"
-#python3 -m venv ${VENV_DIR}
-#source ${VENV_DIR}/bin/activate
-cd /home/pi/YUMI_SYNC
-sudo rm -rf venv
-python3 -m venv venv
-source venv/bin/activate
-
-# Install Python packages in venv
-pip install --upgrade pip
-pip install requests netifaces inotify-simple #python-inotify
-
-
-
->>>>>>> d71f1140defb08cf579e9db051a77553413b926d
 
 main() {
     local rebuildvenv
