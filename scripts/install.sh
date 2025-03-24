@@ -32,6 +32,7 @@ main() {
         install_service
         add_moonraker_update
         generate_moonraker_asvc
+        fix_symlink
     fi
 }
 
@@ -154,4 +155,23 @@ generate_moonraker_asvc() {
     if [[ "${BASH_SOURCE[0]}" = "${0}" ]]; then
         main "${@}"
     fi
+}
+
+fix_symlink() {
+    # === Corriger le lien vers la commande YUMI_SYNC ===
+
+# Chemin vers le script Python à exécuter
+TARGET_SCRIPT="/home/pi/YUMI_SYNC/yumi_sync/yumi_sync.py"
+
+# Lien symbolique global pour utiliser la commande YUMI_SYNC dans tout le système
+ln -sf "$TARGET_SCRIPT" /usr/local/bin/YUMI_SYNC
+chmod +x /usr/local/bin/YUMI_SYNC
+
+# Vérifie que la commande est bien accessible globalement
+if [[ ! -x "$(command -v YUMI_SYNC)" ]]; then
+    echo "❌ YUMI_SYNC n’est toujours pas accessible en tant que commande système."
+    exit 1
+else
+    echo "✅ YUMI_SYNC installé et accessible via la commande système."
+fi
 }
