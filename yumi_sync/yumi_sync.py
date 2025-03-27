@@ -7,7 +7,7 @@ import requests
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 import netifaces
 
 # === CONFIGURATION DU LOG ===
@@ -20,36 +20,26 @@ logging.basicConfig(
 
 file_to_monitor = '/home/pi/printer_data/config/printer.cfg'
 state_file_path = '/home/pi/monitoring_state.json'
-#server_url = "http://adb528.online-server.cloud/route_testing"
 server_url = "http://yumi-id.yumi-lab.com/route_testing"
 
-def get_active_interface():
-    try:
-        default_gateway = netifaces.gateways()['default']
-        default_interface = default_gateway[netifaces.AF_INET][1]
-        return default_interface
-    except Exception as e:
-        logging.error(f"Error getting the active network interface: {e}")
-        return None
+# Forcer l'utilisation de l'interface Ethernet (RJ45)
+FORCED_INTERFACE = 'end0'
 
 def get_mac_address(interface_name):
     try:
         iface = netifaces.ifaddresses(interface_name)[netifaces.AF_LINK]
         return iface[0]['addr']
     except KeyError:
+        logging.error(f"MAC address not found for {interface_name}")
         return None
 
-active_interface = get_active_interface()
+active_interface = FORCED_INTERFACE
+mac_address = get_mac_address(active_interface)
 
-if active_interface:
-    logging.info(f"Active network interface: {active_interface}")
-    mac_address = get_mac_address(active_interface)
-    if mac_address:
-        logging.info(f"MAC address of {active_interface}: {mac_address}")
-    else:
-        logging.warning("MAC address not found.")
+if mac_address:
+    logging.info(f"MAC address of {active_interface}: {mac_address}")
 else:
-    logging.error("No active network interface found.")
+    logging.error("MAC address not found.")
 
 previous_hash = None
 
@@ -100,7 +90,7 @@ def save_last_sent_date(date):
             state_data = json.load(state_file)
     except (FileNotFoundError, json.JSONDecodeError):
         state_data = {}
-    
+
     state_data['last_sent_date'] = date
 
     with open(state_file_path, 'w') as state_file:
@@ -112,7 +102,6 @@ while True:
         if current_hash is not None and current_hash != previous_hash:
             logging.info("?? Detected printer.cfg change. Sending to server...")
             timestamp = time.strftime("%Y-%m-%d-%H-%M-%S")
-            mac_address = get_mac_address(active_interface)
             if mac_address:
                 send_file_to_server(file_to_monitor, timestamp, mac_address)
                 save_current_hash(current_hash)
@@ -124,7 +113,6 @@ while True:
         if last_sent_date is None or (datetime.now() - datetime.strptime(last_sent_date, "%Y-%m-%d")).days >= 30:
             logging.info("?? 30 days passed. Sending file as scheduled.")
             timestamp = time.strftime("%Y-%m-%d-%H-%M-%S")
-            mac_address = get_mac_address(active_interface)
             if mac_address:
                 send_file_to_server(file_to_monitor, timestamp, mac_address)
                 save_current_hash(current_hash)
