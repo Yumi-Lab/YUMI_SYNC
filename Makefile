@@ -12,7 +12,8 @@
 
 
 install: ## Install YUMI_SYNC (needs leading sudo)
-	@bash -c 'scripts/install.sh'
+	sudo bash -x scripts/install.sh
+
 
 uninstall: ## Uninstall YUMI_SYNC
 	@bash -c 'scripts/uninstall.sh'
