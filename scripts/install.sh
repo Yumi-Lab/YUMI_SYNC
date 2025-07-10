@@ -41,6 +41,17 @@ main() {
 install_dependencies() {
     apt-get update --allow-releaseinfo-change
     apt-get install --yes ${PKGLIST}
+    apt-get install --yes python3-pip
+    sudo apt install python3-venv -y
+    python3 -m venv /home/pi/yumi_venv
+    source /home/pi/yumi_venv/bin/activate
+    pip install requests netifaces
+    sudo touch /home/pi/monitoring_state.json
+    sudo chown pi:pi /home/pi/monitoring_state.json
+
+
+
+
 }
 
 create_virtualenv() {

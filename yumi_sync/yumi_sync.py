@@ -12,7 +12,7 @@ import netifaces
 
 # === CONFIGURATION DU LOG ===
 logging.basicConfig(
-    filename='/var/log/yumi_sync.log',
+    filename='/home/pi/printer_data/logs/yumi_sync.log',
     level=logging.INFO,
     format='[%(asctime)s] %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
@@ -30,99 +30,86 @@ def get_mac_address(interface_name):
         iface = netifaces.ifaddresses(interface_name)[netifaces.AF_LINK]
         return iface[0]['addr']
     except KeyError:
-        logging.error(f"MAC address not found for {interface_name}")
+        logging.error(f"❌ MAC address not found for {interface_name}")
         return None
 
-active_interface = FORCED_INTERFACE
-mac_address = get_mac_address(active_interface)
+mac_address = get_mac_address(FORCED_INTERFACE)
 
 if mac_address:
-    logging.info(f"MAC address of {active_interface}: {mac_address}")
+    logging.info(f"✅ MAC address of {FORCED_INTERFACE}: {mac_address}")
 else:
-    logging.error("MAC address not found.")
-
-previous_hash = None
+    logging.error("❌ MAC address not found. Arrêt du script.")
+    exit(1)
 
 def calculate_file_hash(file_path):
     try:
         with open(file_path, 'rb') as file:
             return hashlib.md5(file.read()).hexdigest()
     except Exception as e:
-        logging.error(f"Error calculating file hash: {e}")
+        logging.error(f"❌ Erreur de calcul du hash du fichier : {e}")
         return None
 
 def send_file_to_server(file_path, timestamp, mac_address):
     try:
+        hexid = mac_address.replace(":", "").upper()
+        logging.info(f"📤 Modification détectée de printer.cfg. Envoi en cours... HEX = {hexid}")
+
         with open(file_path, 'rb') as file:
             files = {'file': (os.path.basename(file_path), file)}
-            data = {'timestamp': timestamp, 'mac_address': mac_address}
+            data = {'timestamp': timestamp, 'hexid': hexid}
             response = requests.post(server_url, data=data, files=files)
 
             if response.status_code == 200:
-                logging.info("? File successfully sent to server.")
+                logging.info("✅ Fichier envoyé avec succès au serveur.")
             else:
-                logging.error(f"? Server error {response.status_code} during file send.")
+                logging.error(f"❌ Erreur serveur {response.status_code} pendant l'envoi.")
     except Exception as e:
-        logging.error(f"Exception while sending file: {e}")
+        logging.error(f"❌ Exception lors de l'envoi du fichier : {e}")
 
-def load_previous_hash():
+def load_state():
     try:
-        with open(state_file_path, 'r') as state_file:
-            return state_file.read().strip()
-    except FileNotFoundError:
-        return None
-
-def save_current_hash(current_hash):
-    with open(state_file_path, 'w') as state_file:
-        state_file.write(current_hash)
-
-def load_last_sent_date():
-    try:
-        with open(state_file_path, 'r') as state_file:
-            state_data = json.load(state_file)
-            return state_data.get('last_sent_date')
+        with open(state_file_path, 'r') as f:
+            return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return None
+        return {}
 
-def save_last_sent_date(date):
+def save_state(state):
     try:
-        with open(state_file_path, 'r') as state_file:
-            state_data = json.load(state_file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        state_data = {}
+        with open(state_file_path, 'w') as f:
+            json.dump(state, f)
+    except Exception as e:
+        logging.error(f"❌ Impossible d'écrire dans le fichier state : {e}")
 
-    state_data['last_sent_date'] = date
-
-    with open(state_file_path, 'w') as state_file:
-        json.dump(state_data, state_file)
+state = load_state()
+previous_hash = state.get('last_hash')
+last_sent_date = state.get('last_sent_date')
 
 while True:
     try:
         current_hash = calculate_file_hash(file_to_monitor)
-        if current_hash is not None and current_hash != previous_hash:
-            logging.info("?? Detected printer.cfg change. Sending to server...")
-            timestamp = time.strftime("%Y-%m-%d-%H-%M-%S")
-            if mac_address:
-                send_file_to_server(file_to_monitor, timestamp, mac_address)
-                save_current_hash(current_hash)
-            else:
-                logging.error("MAC address unavailable. Cannot send file.")
-        previous_hash = current_hash
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
-        last_sent_date = load_last_sent_date()
-        if last_sent_date is None or (datetime.now() - datetime.strptime(last_sent_date, "%Y-%m-%d")).days >= 30:
-            logging.info("?? 30 days passed. Sending file as scheduled.")
-            timestamp = time.strftime("%Y-%m-%d-%H-%M-%S")
-            if mac_address:
-                send_file_to_server(file_to_monitor, timestamp, mac_address)
-                save_current_hash(current_hash)
-                save_last_sent_date(time.strftime("%Y-%m-%d"))
-            else:
-                logging.error("MAC address unavailable. Cannot send file.")
+        # Envoi si changement de fichier
+        if current_hash and current_hash != previous_hash:
+            send_file_to_server(file_to_monitor, timestamp, mac_address)
+            state['last_hash'] = current_hash
+            state['last_sent_date'] = today_str
+            save_state(state)
+            previous_hash = current_hash
+        # Envoi forcé tous les 30 jours
+        elif last_sent_date is None or (datetime.now() - datetime.strptime(last_sent_date, "%Y-%m-%d")).days >= 30:
+            logging.info("📅 30 jours écoulés. Envoi planifié du fichier.")
+            send_file_to_server(file_to_monitor, timestamp, mac_address)
+            state['last_hash'] = current_hash
+            state['last_sent_date'] = today_str
+            save_state(state)
+            previous_hash = current_hash
 
         time.sleep(5)
+
     except KeyboardInterrupt:
-        logging.info("?? Monitoring stopped by user.")
+        logging.info("🛑 Arrêt manuel du script.")
         break
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+        logging.error(f"❌ Erreur inattendue dans la boucle principale : {e}")
