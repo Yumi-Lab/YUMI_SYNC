@@ -15,29 +15,6 @@ else
 fi
 [[ -n "${BASE_USER}" ]] || { echo "Error: BASE_USER is not defined."; exit 1; }
 
-main() {
-    local rebuildvenv
-    case "${@}" in
-        -r|--rebuildvenv)
-            rebuildvenv="true"
-        ;;
-        *)
-        ;;
-    esac
-    if [[ "${rebuildvenv}" = "true" ]]; then
-        rebuild_venv
-        printf "Rebuilding virtual environment done!\n"
-        exit 0
-    else
-        install_dependencies
-        create_virtualenv
-        install_service
-        generate_moonraker_update
-        generate_moonraker_asvc
-        fix_symlink
-    fi
-}
-
 install_dependencies() {
     apt-get update --allow-releaseinfo-change
     apt-get install --yes ${PKGLIST}
@@ -48,10 +25,6 @@ install_dependencies() {
     pip install requests netifaces
     sudo touch /home/pi/monitoring_state.json
     sudo chown pi:pi /home/pi/monitoring_state.json
-
-
-
-
 }
 
 create_virtualenv() {
@@ -59,10 +32,12 @@ create_virtualenv() {
     py_bin="$(which python3)"
     printf "Creating virtual environment ...\n"
     "${py_bin}" -m venv "${INSTALL_DIR}/venv"
-    printf "Install requirements ...\n"
+    printf "Installing required Python packages ...\n"
+
+    "${INSTALL_DIR}/venv/bin/pip" install requests netifaces
 
     if [[ ! -f "${INSTALL_DIR}/requirements.txt" ]]; then
-        echo "requirements.txt not found, skipping package installation."
+        echo "requirements.txt not found, skipping additional package installation."
         return
     fi
 
@@ -102,10 +77,9 @@ StandardError=append:/var/log/yumi_sync.log
 [Install]
 WantedBy=multi-user.target
 EOF
-touch /var/log/yumi_sync.log
-chown "${BASE_USER}:${BASE_USER}" /var/log/yumi_sync.log
-chmod 644 /var/log/yumi_sync.log
-
+    touch /var/log/yumi_sync.log
+    chown "${BASE_USER}:${BASE_USER}" /var/log/yumi_sync.log
+    chmod 644 /var/log/yumi_sync.log
 }
 
 install_service() {
@@ -156,6 +130,29 @@ fix_symlink() {
         exit 1
     else
         echo "✅ YUMI_SYNC installé et accessible via la commande système."
+    fi
+}
+
+main() {
+    local rebuildvenv
+    case "${@}" in
+        -r|--rebuildvenv)
+            rebuildvenv="true"
+        ;;
+        *)
+        ;;
+    esac
+    if [[ "${rebuildvenv}" = "true" ]]; then
+        rebuild_venv
+        printf "Rebuilding virtual environment done!\n"
+        exit 0
+    else
+        install_dependencies
+        create_virtualenv
+        install_service
+        generate_moonraker_update
+        generate_moonraker_asvc
+        fix_symlink
     fi
 }
 
