@@ -133,6 +133,10 @@ fix_symlink() {
     fi
 }
 
+install_id_klipperscreen() {
+        cp /home/pi/YUMI_SYNC/Config/base_panel.py /home/pi/KlipperScreen/panels/base_panel.py
+}
+
 main() {
     local rebuildvenv
     case "${@}" in
@@ -153,6 +157,7 @@ main() {
         generate_moonraker_update
         generate_moonraker_asvc
         fix_symlink
+        install_id_klipperscreen
     fi
 }
 
