@@ -134,7 +134,7 @@ fix_symlink() {
 }
 
 install_id_klipperscreen() {
-        cp /home/pi/YUMI_SYNC/Config/base_panel.py /home/pi/KlipperScreen/panels/base_panel.py
+        cp /home/pi/YUMI_SYNC/scripts/Config//base_panel.py /home/pi/KlipperScreen/panels/base_panel.py
 }
 
 main() {
