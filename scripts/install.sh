@@ -157,7 +157,7 @@ main() {
         generate_moonraker_update
         generate_moonraker_asvc
         fix_symlink
-        install_id_klipperscreen
+        #install_id_klipperscreen
     fi
 }
 
