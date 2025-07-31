@@ -76,17 +76,18 @@ def save_state(state):
     except Exception as e:
         logging.error("❌ Failed to write state file: %s", e)
 
-state = load_state()
-previous_hash = state.get('last_hash')
-previous_mtime = state.get('last_mtime')
-last_sent_date = state.get('last_sent_date')
-
 logging.info("🚀 Yumi Sync client started")
 
 while True:
     try:
         today_str = datetime.now().strftime("%Y-%m-%d")
         timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+
+        # 🔁 recharge l'état à chaque boucle
+        state = load_state()
+        last_sent_date = state.get('last_sent_date')
+        previous_hash = state.get('last_hash')
+        previous_mtime = state.get('last_mtime')
 
         try:
             current_mtime = os.path.getmtime(file_to_monitor)
@@ -107,8 +108,6 @@ while True:
             state['last_mtime'] = current_mtime
             state['last_sent_date'] = today_str
             save_state(state)
-            previous_hash = current_hash
-            previous_mtime = current_mtime
 
         elif last_sent_date is None or (datetime.now() - datetime.strptime(last_sent_date, "%Y-%m-%d")).days >= 30:
             logging.info("📅 30 days elapsed. Scheduled file send.")
@@ -117,8 +116,6 @@ while True:
             state['last_mtime'] = current_mtime
             state['last_sent_date'] = today_str
             save_state(state)
-            previous_hash = current_hash
-            previous_mtime = current_mtime
 
         time.sleep(5)
 
