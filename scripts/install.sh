@@ -5,7 +5,7 @@ set -x
 
 PKGLIST="python3 python3-venv"
 SERVICE_FILE_PATH="/etc/systemd/system/yumi_sync.service"
-INSTALL_DIR="/home/pi/YUMI_SYNC"  # Répertoire d'installation par défaut
+INSTALL_DIR="/home/pi/YUMI_SYNC"
 
 # Détection de l'utilisateur de base
 if [[ -n "$SUDO_USER" ]]; then
@@ -65,7 +65,6 @@ After=network-online.target
 
 [Service]
 Type=simple
-# ExecStartPre=/bin/sleep 10
 ExecStart=${INSTALL_DIR}/venv/bin/python ${INSTALL_DIR}/yumi_sync/yumi_sync.py
 WorkingDirectory=${INSTALL_DIR}
 Restart=always
@@ -123,18 +122,26 @@ generate_moonraker_asvc() {
 fix_symlink() {
     TARGET_SCRIPT="/home/pi/YUMI_SYNC/yumi_sync/yumi_sync.py"
     ln -sf "$TARGET_SCRIPT" /usr/local/bin/YUMI_SYNC
-    chmod +x /usr/local/bin/YUMI_SYNC
+    # Don't chmod the symlink target — it dirties the git repo
+    # The venv python handles execution directly
 
-    if [[ ! -x "$(command -v YUMI_SYNC)" ]]; then
-        echo "❌ YUMI_SYNC n’est toujours pas accessible en tant que commande système."
+    if [[ ! -L /usr/local/bin/YUMI_SYNC ]]; then
+        echo "YUMI_SYNC symlink not created."
         exit 1
     else
-        echo "✅ YUMI_SYNC installé et accessible via la commande système."
+        echo "YUMI_SYNC installed and accessible as system command."
     fi
 }
 
 install_id_klipperscreen() {
-        cp /home/pi/YUMI_SYNC/scripts/Config//base_panel.py /home/pi/KlipperScreen/panels/base_panel.py
+    cp /home/pi/YUMI_SYNC/scripts/Config//base_panel.py /home/pi/KlipperScreen/panels/base_panel.py
+}
+
+# Reset any permission changes that dirty the git repo
+cleanup_git() {
+    pushd "${INSTALL_DIR}" &>/dev/null || return
+    git checkout . 2>/dev/null || true
+    popd &>/dev/null || return
 }
 
 main() {
@@ -157,11 +164,10 @@ main() {
         generate_moonraker_update
         generate_moonraker_asvc
         fix_symlink
-        #install_id_klipperscreen
+        cleanup_git
     fi
 }
 
-# Lancement
 if [[ "${BASH_SOURCE[0]}" = "${0}" ]]; then
     main "${@}"
 fi
