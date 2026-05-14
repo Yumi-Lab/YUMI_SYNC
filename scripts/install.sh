@@ -84,6 +84,9 @@ EOF
 install_service() {
     printf "Install Yumi Sync service ...\n"
     create_service_file
+    # Symlink so both yumi_sync and YUMI_SYNC work as service names
+    ln -sf "${SERVICE_FILE_PATH}" /etc/systemd/system/YUMI_SYNC.service
+    systemctl daemon-reload
     printf "Enable Yumi Sync Service ...\n"
     systemctl enable "$(basename "${SERVICE_FILE_PATH}")"
     printf "Start Yumi Sync Service ...\n"
