@@ -4,7 +4,7 @@ import requests
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import netifaces
 
 # === LOG CONFIGURATION ===
@@ -20,53 +20,64 @@ file_to_monitor = '/home/pi/printer_data/config/printer.cfg'
 state_file_path = '/home/pi/monitoring_state.json'
 server_url = "http://yumi-id.yumi-lab.com/upload"
 FORCED_INTERFACE = 'end0'
+POLL_INTERVAL = 30  # seconds
+CLIENT_BOOT_DELAY_DAYS = 15  # days after factory QC to detect client first boot
 
 def get_mac_address(interface_name):
     try:
         iface = netifaces.ifaddresses(interface_name)[netifaces.AF_LINK]
         return iface[0]['addr']
     except KeyError:
-        logging.error("❌ MAC address not found for interface: %s", interface_name)
+        logging.error("MAC address not found for interface: %s", interface_name)
         return None
 
 mac_address = get_mac_address(FORCED_INTERFACE)
 if not mac_address:
-    logging.error("❌ MAC address not found. Exiting script.")
+    logging.error("MAC address not found. Exiting script.")
     exit(1)
 
-logging.info("✅ MAC address detected: %s", mac_address)
+logging.info("MAC address detected: %s", mac_address)
 
 def calculate_file_hash(file_path):
     try:
         with open(file_path, 'rb') as file:
             return hashlib.md5(file.read()).hexdigest()
     except Exception as e:
-        logging.error("❌ Error calculating file hash: %s", e)
+        logging.error("Error calculating file hash: %s", e)
         return None
 
-def send_file_to_server(file_path, timestamp, mac_address):
-    try:
-        hexid = mac_address.replace(":", "").upper()
-        logging.info("📤 printer.cfg change detected. Sending to server... HEX = %s", hexid)
+def send_file_to_server(file_path, mac_address):
+    hexid = mac_address.replace(":", "").upper()
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    logging.info("Sending printer.cfg to server... HEX = %s", hexid)
 
-        with open(file_path, 'rb') as file:
-            files = {'file': (os.path.basename(file_path), file)}
-            data = {'timestamp': timestamp, 'hexid': hexid}
-            headers = {'User-Agent': 'YumiSyncClient/1.0'}
-            response = requests.post(server_url, data=data, files=files, headers=headers, timeout=10)
-
-            if response.status_code == 200:
-                logging.info("✅ File successfully sent to server.")
-            else:
-                logging.error("❌ Server error %s during upload.", response.status_code)
-    except Exception as e:
-        logging.error("❌ Exception during file upload: %s", e)
+    with open(file_path, 'rb') as file:
+        files = {'file': (os.path.basename(file_path), file)}
+        data = {'timestamp': timestamp, 'hexid': hexid}
+        headers = {'User-Agent': 'YumiSyncClient/2.0'}
+        response = requests.post(server_url, data=data, files=files, headers=headers, timeout=15)
+        response.raise_for_status()
+        logging.info("File successfully sent to server.")
 
 def load_state():
     try:
         with open(state_file_path, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+            content = f.read().strip()
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                # V1 legacy: state file was plain text hash (32 hex chars)
+                if content and len(content) == 32:
+                    logging.info("Migrating v1 state file to v2 format...")
+                    migrated = {
+                        'last_hash': content,
+                        'first_boot_date': datetime.now().isoformat(),
+                        'client_registered': True
+                    }
+                    save_state(migrated)
+                    return migrated
+                return {}
+    except FileNotFoundError:
         return {}
 
 def save_state(state):
@@ -74,53 +85,75 @@ def save_state(state):
         with open(state_file_path, 'w') as f:
             json.dump(state, f)
     except Exception as e:
-        logging.error("❌ Failed to write state file: %s", e)
+        logging.error("Failed to write state file: %s", e)
 
-logging.info("🚀 Yumi Sync client started")
+def main():
+    state = load_state()
+    previous_hash = state.get('last_hash')
 
-while True:
-    try:
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-
-        # 🔁 recharge l'état à chaque boucle
-        state = load_state()
-        last_sent_date = state.get('last_sent_date')
-        previous_hash = state.get('last_hash')
-        previous_mtime = state.get('last_mtime')
-
-        try:
-            current_mtime = os.path.getmtime(file_to_monitor)
-        except FileNotFoundError:
-            logging.warning("⚠️ File not found: %s", file_to_monitor)
-            time.sleep(5)
-            continue
-
+    # First boot (factory QC): no state file yet
+    if not previous_hash:
         current_hash = calculate_file_hash(file_to_monitor)
+        if current_hash:
+            logging.info("First boot detected (factory QC), registering device...")
+            try:
+                send_file_to_server(file_to_monitor, mac_address)
+                state = {
+                    'last_hash': current_hash,
+                    'first_boot_date': datetime.now().isoformat(),
+                    'client_registered': False
+                }
+                save_state(state)
+                previous_hash = current_hash
+                logging.info("Device registered (factory QC).")
+            except Exception as e:
+                logging.error("First boot send failed: %s", e)
 
-        if (
-            current_hash
-            and current_hash != previous_hash
-            and current_mtime != previous_mtime
-        ):
-            send_file_to_server(file_to_monitor, timestamp, mac_address)
-            state['last_hash'] = current_hash
-            state['last_mtime'] = current_mtime
-            state['last_sent_date'] = today_str
-            save_state(state)
+    # Client first boot: >15 days after factory QC, not yet registered
+    if not state.get('client_registered') and state.get('first_boot_date'):
+        try:
+            first_boot = datetime.fromisoformat(state['first_boot_date'])
+            if datetime.now() - first_boot > timedelta(days=CLIENT_BOOT_DELAY_DAYS):
+                current_hash = calculate_file_hash(file_to_monitor)
+                if current_hash:
+                    logging.info("Client first boot detected (>%d days since QC), sending config...", CLIENT_BOOT_DELAY_DAYS)
+                    try:
+                        send_file_to_server(file_to_monitor, mac_address)
+                        state['last_hash'] = current_hash
+                        state['client_registered'] = True
+                        state['client_boot_date'] = datetime.now().isoformat()
+                        save_state(state)
+                        previous_hash = current_hash
+                        logging.info("Client registered.")
+                    except Exception as e:
+                        logging.error("Client boot send failed: %s", e)
+        except (ValueError, TypeError) as e:
+            logging.error("Invalid first_boot_date in state: %s", e)
 
-        elif last_sent_date is None or (datetime.now() - datetime.strptime(last_sent_date, "%Y-%m-%d")).days >= 30:
-            logging.info("📅 30 days elapsed. Scheduled file send.")
-            send_file_to_server(file_to_monitor, timestamp, mac_address)
-            state['last_hash'] = current_hash
-            state['last_mtime'] = current_mtime
-            state['last_sent_date'] = today_str
-            save_state(state)
+    logging.info("Yumi Sync client started (poll every %ds)", POLL_INTERVAL)
 
-        time.sleep(5)
+    # Main loop: only send on file change
+    while True:
+        try:
+            current_hash = calculate_file_hash(file_to_monitor)
 
-    except KeyboardInterrupt:
-        logging.info("🛑 Script manually stopped.")
-        break
-    except Exception as e:
-        logging.error("❌ Unexpected error in main loop: %s", e)
+            if current_hash and current_hash != previous_hash:
+                try:
+                    send_file_to_server(file_to_monitor, mac_address)
+                    state['last_hash'] = current_hash
+                    save_state(state)
+                    previous_hash = current_hash
+                except Exception as e:
+                    logging.error("Send failed: %s", e)
+
+            time.sleep(POLL_INTERVAL)
+
+        except KeyboardInterrupt:
+            logging.info("Script manually stopped.")
+            break
+        except Exception as e:
+            logging.error("Unexpected error in main loop: %s", e)
+            time.sleep(POLL_INTERVAL)
+
+if __name__ == '__main__':
+    main()
