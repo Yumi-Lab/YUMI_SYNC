@@ -93,13 +93,12 @@ install_service() {
 generate_moonraker_update() {
     local config_file="/home/pi/printer_data/config/update_YUMI_SYNC.cfg"
     cat <<EOL > "${config_file}"
-# YUMI_SYNC update_manager entry 
-[update_manager YUMI_SYNC]
+[update_manager yumi_sync]
 type: git_repo
 path: ~/YUMI_SYNC
 origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
 primary_branch: main
-managed_services: YUMI_SYNC
+managed_services: yumi_sync
 install_script: scripts/install.sh
 EOL
     chmod 644 "${config_file}"
@@ -116,7 +115,7 @@ generate_moonraker_asvc() {
         echo "La ligne existe déjà dans $CONFIG_FILE"
     fi
 
-    echo "YUMI_SYNC" | sudo tee -a /home/pi/printer_data/moonraker.asvc
+    echo "yumi_sync" | sudo tee -a /home/pi/printer_data/moonraker.asvc
 }
 
 fix_symlink() {
