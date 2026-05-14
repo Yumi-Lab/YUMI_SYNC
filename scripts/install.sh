@@ -4,7 +4,7 @@
 set -x
 
 PKGLIST="python3 python3-venv"
-SERVICE_FILE_PATH="/etc/systemd/system/yumi_sync.service"
+SERVICE_FILE_PATH="/etc/systemd/system/YUMI_SYNC.service"
 INSTALL_DIR="/home/pi/YUMI_SYNC"
 
 # Détection de l'utilisateur de base
@@ -84,8 +84,8 @@ EOF
 install_service() {
     printf "Install Yumi Sync service ...\n"
     create_service_file
-    # Symlink so both yumi_sync and YUMI_SYNC work as service names
-    ln -sf "${SERVICE_FILE_PATH}" /etc/systemd/system/YUMI_SYNC.service
+    # Symlink for backward compatibility with old yumi_sync.service name
+    ln -sf "${SERVICE_FILE_PATH}" /etc/systemd/system/yumi_sync.service
     systemctl daemon-reload
     printf "Enable Yumi Sync Service ...\n"
     systemctl enable "$(basename "${SERVICE_FILE_PATH}")"
@@ -96,12 +96,13 @@ install_service() {
 generate_moonraker_update() {
     local config_file="/home/pi/printer_data/config/update_YUMI_SYNC.cfg"
     cat <<EOL > "${config_file}"
-[update_manager yumi_sync]
+# YUMI_SYNC update_manager entry
+[update_manager YUMI_SYNC]
 type: git_repo
 path: ~/YUMI_SYNC
 origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
 primary_branch: main
-managed_services: yumi_sync
+managed_services: YUMI_SYNC
 install_script: scripts/install.sh
 EOL
     chmod 644 "${config_file}"
@@ -118,7 +119,7 @@ generate_moonraker_asvc() {
         echo "La ligne existe déjà dans $CONFIG_FILE"
     fi
 
-    echo "yumi_sync" | sudo tee -a /home/pi/printer_data/moonraker.asvc
+    echo "YUMI_SYNC" | sudo tee -a /home/pi/printer_data/moonraker.asvc
 }
 
 fix_symlink() {
