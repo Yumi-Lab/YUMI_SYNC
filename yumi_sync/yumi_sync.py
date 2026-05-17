@@ -144,6 +144,16 @@ system_dependencies: system_dependencies.json
                     f.write(conf)
                 logging.info("Fixed moonraker.conf include for yumi_sync")
 
+    # Ensure yumi_sync is in moonraker.asvc (allowed services)
+    asvc_path = '/home/pi/printer_data/moonraker.asvc'
+    if os.path.isfile(asvc_path):
+        with open(asvc_path, 'r') as f:
+            asvc_content = f.read()
+        if 'yumi_sync' not in asvc_content:
+            with open(asvc_path, 'a') as f:
+                f.write('\nyumi_sync\n')
+            logging.info("Added yumi_sync to moonraker.asvc")
+
 # === REPO INSTALL REPAIR ===
 # Tracks install.sh hash per repo. If changed (or first run), re-executes it.
 # Moonraker only does git pull — it never runs install scripts.
