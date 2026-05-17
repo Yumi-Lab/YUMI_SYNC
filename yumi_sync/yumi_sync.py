@@ -88,6 +88,62 @@ def save_state(state):
     except Exception as e:
         logging.error("Failed to write state file: %s", e)
 
+# === SELF-REPAIR: Fix Moonraker update config ===
+# Old installs have managed_services: YUMI_SYNC (uppercase) but systemd service is yumi_sync (lowercase)
+
+def fix_own_moonraker_config():
+    config_paths = [
+        '/home/pi/printer_data/config/update_YUMI_SYNC.cfg',
+        '/home/pi/printer_data/config/update_yumi_sync.cfg',
+    ]
+    correct_config = """# YUMI_SYNC update_manager entry
+[update_manager yumi_sync]
+type: git_repo
+path: ~/YUMI_SYNC
+origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
+primary_branch: main
+managed_services: yumi_sync
+system_dependencies: system_dependencies.json
+"""
+    # Check if old uppercase config exists
+    old_cfg = '/home/pi/printer_data/config/update_YUMI_SYNC.cfg'
+    new_cfg = '/home/pi/printer_data/config/update_yumi_sync.cfg'
+
+    needs_fix = False
+    if os.path.isfile(old_cfg):
+        needs_fix = True
+        os.remove(old_cfg)
+        logging.info("Removed old update_YUMI_SYNC.cfg")
+    if os.path.isfile(new_cfg):
+        with open(new_cfg, 'r') as f:
+            content = f.read()
+        if 'managed_services: YUMI_SYNC' in content or 'system_dependencies' not in content:
+            needs_fix = True
+    else:
+        needs_fix = True
+
+    if needs_fix:
+        with open(new_cfg, 'w') as f:
+            f.write(correct_config)
+        logging.info("Fixed YUMI_SYNC moonraker update config (lowercase service name)")
+
+        # Fix moonraker.conf include
+        moonraker_conf = '/home/pi/printer_data/config/moonraker.conf'
+        if os.path.isfile(moonraker_conf):
+            with open(moonraker_conf, 'r') as f:
+                conf = f.read()
+            changed = False
+            if '[include update_YUMI_SYNC.cfg]' in conf:
+                conf = conf.replace('[include update_YUMI_SYNC.cfg]', '[include update_yumi_sync.cfg]')
+                changed = True
+            if '[include update_yumi_sync.cfg]' not in conf:
+                conf = '[include update_yumi_sync.cfg]\n' + conf
+                changed = True
+            if changed:
+                with open(moonraker_conf, 'w') as f:
+                    f.write(conf)
+                logging.info("Fixed moonraker.conf include for yumi_sync")
+
 # === REPO INSTALL REPAIR ===
 # Tracks install.sh hash per repo. If changed (or first run), re-executes it.
 # Moonraker only does git pull — it never runs install scripts.
@@ -96,7 +152,6 @@ INSTALL_STATE_PATH = '/home/pi/.yumi_install_state.json'
 MANAGED_REPOS = [
     {'name': 'yumi-config', 'path': '/home/pi/yumi-config', 'script': 'install.sh'},
     {'name': 'YUMI_PLR', 'path': '/home/pi/YUMI_PLR', 'script': 'install.sh'},
-    {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh'},       # V1
     {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},       # V1
     {'name': 'moonraker-app-yumi-lab', 'path': '/home/pi/moonraker-app-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},  # V2
 ]
@@ -149,6 +204,12 @@ def repair_repos():
             logging.error("Repo %s: install.sh error: %s", repo['name'], e)
 
 def main():
+    # Fix own moonraker config (uppercase -> lowercase service name)
+    try:
+        fix_own_moonraker_config()
+    except Exception as e:
+        logging.error("Self-repair config failed: %s", e)
+
     # Run install repair before main sync loop
     try:
         repair_repos()
