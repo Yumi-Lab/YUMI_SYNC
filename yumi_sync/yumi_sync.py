@@ -186,18 +186,30 @@ def repair_repos():
                      repo['name'], saved_hash or 'NONE', current_hash)
         try:
             cmd = ['bash', repo['script']] + repo.get('args', [])
+            env = os.environ.copy()
+            env.update({
+                'HOME': '/home/pi',
+                'USER': 'pi',
+                'LOGNAME': 'pi',
+                'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+            })
             result = subprocess.run(
                 cmd,
                 cwd=repo['path'],
+                env=env,
                 capture_output=True, text=True, timeout=300
             )
             if result.returncode == 0:
                 logging.info("Repo %s: install.sh executed successfully", repo['name'])
+                if result.stdout:
+                    logging.debug("Repo %s stdout: %s", repo['name'], result.stdout[-1000:])
                 install_state[repo['name']] = current_hash
                 _save_install_state(install_state)
             else:
-                logging.error("Repo %s: install.sh failed (exit %d): %s",
-                              repo['name'], result.returncode, result.stderr[-500:])
+                logging.error("Repo %s: install.sh failed (exit %d)\nstderr: %s\nstdout: %s",
+                              repo['name'], result.returncode,
+                              result.stderr[-500:] if result.stderr else '',
+                              result.stdout[-500:] if result.stdout else '')
         except subprocess.TimeoutExpired:
             logging.error("Repo %s: install.sh timed out (300s)", repo['name'])
         except Exception as e:
