@@ -154,6 +154,65 @@ system_dependencies: system_dependencies.json
                 f.write('\nyumi_sync\n')
             logging.info("Added yumi_sync to moonraker.asvc")
 
+# === CPU GOVERNOR FIX (Bookworm only) ===
+# V1 pads on Debian 12 had a broken set-cpu-freq.service that disabled itself after first boot.
+# Fix: write correct /etc/default/cpufrequtils once, let cpufrequtils handle it natively.
+# Debian 13 (trixie) images already have this right from the build.
+
+CPUFREQ_CONFIG = '/etc/default/cpufrequtils'
+CPUFREQ_CORRECT = """ENABLE=true
+GOVERNOR=userspace
+MIN_SPEED=960000
+MAX_SPEED=960000
+"""
+
+def fix_cpu_governor():
+    # Only run on Bookworm (Debian 12)
+    try:
+        with open('/etc/os-release', 'r') as f:
+            os_info = f.read()
+        if 'bookworm' not in os_info:
+            return
+    except Exception:
+        return
+
+    # Check if already correct
+    try:
+        with open(CPUFREQ_CONFIG, 'r') as f:
+            current = f.read()
+        if 'GOVERNOR=userspace' in current and 'MIN_SPEED=960000' in current and 'MAX_SPEED=960000' in current and 'ENABLE=true' in current:
+            return
+    except FileNotFoundError:
+        pass
+
+    # Write correct config
+    logging.info("Fixing CPU governor config for Bookworm (userspace 960MHz)...")
+    try:
+        with open(CPUFREQ_CONFIG, 'w') as f:
+            f.write(CPUFREQ_CORRECT)
+        logging.info("Wrote %s", CPUFREQ_CONFIG)
+    except PermissionError:
+        logging.error("Cannot write %s — not running as root?", CPUFREQ_CONFIG)
+        return
+
+    # Remove old broken set-cpu-freq service + script
+    old_service = '/etc/systemd/system/set-cpu-freq.service'
+    old_script = '/usr/local/bin/set_cpu_freq.sh'
+    if os.path.isfile(old_service):
+        subprocess.run(['systemctl', 'disable', 'set-cpu-freq.service'], capture_output=True)
+        subprocess.run(['systemctl', 'stop', 'set-cpu-freq.service'], capture_output=True)
+        os.remove(old_service)
+        subprocess.run(['systemctl', 'daemon-reload'], capture_output=True)
+        logging.info("Removed old set-cpu-freq.service")
+    if os.path.isfile(old_script):
+        os.remove(old_script)
+        logging.info("Removed old %s", old_script)
+
+    # Restart cpufrequtils to apply immediately
+    subprocess.run(['systemctl', 'restart', 'cpufrequtils'], capture_output=True)
+    logging.info("CPU governor fix applied — userspace 960MHz")
+
+
 # === REPO INSTALL REPAIR ===
 # Tracks install.sh hash per repo. If changed (or first run), re-executes it.
 # Moonraker only does git pull — it never runs install scripts.
@@ -231,6 +290,12 @@ def main():
         fix_own_moonraker_config()
     except Exception as e:
         logging.error("Self-repair config failed: %s", e)
+
+    # Fix CPU governor on Bookworm (one-shot)
+    try:
+        fix_cpu_governor()
+    except Exception as e:
+        logging.error("CPU governor fix failed: %s", e)
 
     # Run install repair before main sync loop
     try:
