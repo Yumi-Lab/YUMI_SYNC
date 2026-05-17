@@ -1,4 +1,5 @@
 import os
+import subprocess
 import time
 import requests
 import hashlib
@@ -87,7 +88,72 @@ def save_state(state):
     except Exception as e:
         logging.error("Failed to write state file: %s", e)
 
+# === REPO INSTALL REPAIR ===
+# Tracks install.sh hash per repo. If changed (or first run), re-executes it.
+# Moonraker only does git pull — it never runs install scripts.
+
+INSTALL_STATE_PATH = '/home/pi/.yumi_install_state.json'
+MANAGED_REPOS = [
+    {'name': 'YUMI_SYNC', 'path': '/home/pi/YUMI_SYNC', 'script': 'scripts/install.sh'},
+    {'name': 'yumi-config', 'path': '/home/pi/yumi-config', 'script': 'install.sh'},
+    {'name': 'YUMI_PLR', 'path': '/home/pi/YUMI_PLR', 'script': 'install.sh'},
+    {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh'},       # V1
+    {'name': 'moonraker-app-yumi-lab', 'path': '/home/pi/moonraker-app-yumi-lab', 'script': 'install.sh'},  # V2
+]
+
+def _load_install_state():
+    try:
+        with open(INSTALL_STATE_PATH, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def _save_install_state(state):
+    try:
+        with open(INSTALL_STATE_PATH, 'w') as f:
+            json.dump(state, f)
+    except Exception as e:
+        logging.error("Failed to write install state: %s", e)
+
+def repair_repos():
+    install_state = _load_install_state()
+    for repo in MANAGED_REPOS:
+        script_path = os.path.join(repo['path'], repo['script'])
+        if not os.path.isfile(script_path):
+            continue
+        current_hash = calculate_file_hash(script_path)
+        if not current_hash:
+            continue
+        saved_hash = install_state.get(repo['name'])
+        if current_hash == saved_hash:
+            continue
+        logging.info("Repo %s: install.sh changed (hash %s -> %s), executing...",
+                     repo['name'], saved_hash or 'NONE', current_hash)
+        try:
+            result = subprocess.run(
+                ['bash', repo['script']],
+                cwd=repo['path'],
+                capture_output=True, text=True, timeout=120
+            )
+            if result.returncode == 0:
+                logging.info("Repo %s: install.sh executed successfully", repo['name'])
+                install_state[repo['name']] = current_hash
+                _save_install_state(install_state)
+            else:
+                logging.error("Repo %s: install.sh failed (exit %d): %s",
+                              repo['name'], result.returncode, result.stderr[-500:])
+        except subprocess.TimeoutExpired:
+            logging.error("Repo %s: install.sh timed out (120s)", repo['name'])
+        except Exception as e:
+            logging.error("Repo %s: install.sh error: %s", repo['name'], e)
+
 def main():
+    # Run install repair before main sync loop
+    try:
+        repair_repos()
+    except Exception as e:
+        logging.error("Repo repair failed: %s", e)
+
     state = load_state()
     previous_hash = state.get('last_hash')
 
