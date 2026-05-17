@@ -97,7 +97,8 @@ MANAGED_REPOS = [
     {'name': 'yumi-config', 'path': '/home/pi/yumi-config', 'script': 'install.sh'},
     {'name': 'YUMI_PLR', 'path': '/home/pi/YUMI_PLR', 'script': 'install.sh'},
     {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh'},       # V1
-    {'name': 'moonraker-app-yumi-lab', 'path': '/home/pi/moonraker-app-yumi-lab', 'script': 'install.sh'},  # V2
+    {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},       # V1
+    {'name': 'moonraker-app-yumi-lab', 'path': '/home/pi/moonraker-app-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},  # V2
 ]
 
 def _load_install_state():
@@ -129,8 +130,9 @@ def repair_repos():
         logging.info("Repo %s: install.sh changed (hash %s -> %s), executing...",
                      repo['name'], saved_hash or 'NONE', current_hash)
         try:
+            cmd = ['bash', repo['script']] + repo.get('args', [])
             result = subprocess.run(
-                ['bash', repo['script']],
+                cmd,
                 cwd=repo['path'],
                 capture_output=True, text=True, timeout=300
             )
