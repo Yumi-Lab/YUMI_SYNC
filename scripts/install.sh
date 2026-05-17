@@ -92,7 +92,9 @@ install_service() {
 }
 
 generate_moonraker_update() {
-    local config_file="/home/pi/printer_data/config/update_YUMI_SYNC.cfg"
+    local config_file="/home/pi/printer_data/config/update_yumi_sync.cfg"
+    # Remove old filename if exists
+    rm -f "/home/pi/printer_data/config/update_YUMI_SYNC.cfg"
     cat <<EOL > "${config_file}"
 [update_manager yumi_sync]
 type: git_repo
@@ -101,13 +103,16 @@ origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
 primary_branch: main
 managed_services: yumi_sync
 install_script: scripts/install.sh
+system_dependencies: system_dependencies.json
 EOL
     chmod 644 "${config_file}"
 }
 
 generate_moonraker_asvc() {
     CONFIG_FILE="/home/pi/printer_data/config/moonraker.conf"
-    INCLUDE_LINE="[include update_YUMI_SYNC.cfg]"
+    INCLUDE_LINE="[include update_yumi_sync.cfg]"
+    # Remove old include if present
+    sed -i '/include update_YUMI_SYNC.cfg/d' "$CONFIG_FILE"
 
     if ! grep -Fxq "$INCLUDE_LINE" "$CONFIG_FILE"; then
         echo "$INCLUDE_LINE" | sudo tee -a "$CONFIG_FILE" > /dev/null
