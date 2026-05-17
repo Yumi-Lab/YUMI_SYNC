@@ -94,7 +94,6 @@ def save_state(state):
 
 INSTALL_STATE_PATH = '/home/pi/.yumi_install_state.json'
 MANAGED_REPOS = [
-    {'name': 'YUMI_SYNC', 'path': '/home/pi/YUMI_SYNC', 'script': 'scripts/install.sh'},
     {'name': 'yumi-config', 'path': '/home/pi/yumi-config', 'script': 'install.sh'},
     {'name': 'YUMI_PLR', 'path': '/home/pi/YUMI_PLR', 'script': 'install.sh'},
     {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh'},       # V1
@@ -133,7 +132,7 @@ def repair_repos():
             result = subprocess.run(
                 ['bash', repo['script']],
                 cwd=repo['path'],
-                capture_output=True, text=True, timeout=120
+                capture_output=True, text=True, timeout=300
             )
             if result.returncode == 0:
                 logging.info("Repo %s: install.sh executed successfully", repo['name'])
@@ -143,7 +142,7 @@ def repair_repos():
                 logging.error("Repo %s: install.sh failed (exit %d): %s",
                               repo['name'], result.returncode, result.stderr[-500:])
         except subprocess.TimeoutExpired:
-            logging.error("Repo %s: install.sh timed out (120s)", repo['name'])
+            logging.error("Repo %s: install.sh timed out (300s)", repo['name'])
         except Exception as e:
             logging.error("Repo %s: install.sh error: %s", repo['name'], e)
 
