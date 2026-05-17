@@ -213,61 +213,6 @@ def fix_cpu_governor():
     logging.info("CPU governor fix applied — userspace 960MHz")
 
 
-# === PLYMOUTH THEME FIX (Bookworm only) ===
-# armbian-plymouth-theme postinst overwrites plymouthd.conf with Theme=armbian on every upgrade.
-# We force hexagon_alt back and rebuild initramfs so boot splash stays consistent.
-
-PLYMOUTH_CONF = '/etc/plymouth/plymouthd.conf'
-PLYMOUTH_THEME = 'hexagon_alt'
-
-def fix_plymouth_theme():
-    # Only run on Bookworm (Debian 12)
-    try:
-        with open('/etc/os-release', 'r') as f:
-            os_info = f.read()
-        if 'bookworm' not in os_info:
-            return
-    except Exception:
-        return
-
-    # Check if theme is already correct
-    try:
-        with open(PLYMOUTH_CONF, 'r') as f:
-            current = f.read()
-        if 'Theme=' + PLYMOUTH_THEME in current:
-            return
-    except FileNotFoundError:
-        return
-
-    # Theme was overwritten (likely by armbian-plymouth-theme upgrade)
-    logging.info("Plymouth theme was changed, restoring %s...", PLYMOUTH_THEME)
-
-    # Check the theme actually exists
-    theme_path = f'/usr/share/plymouth/themes/{PLYMOUTH_THEME}/{PLYMOUTH_THEME}.plymouth'
-    if not os.path.isfile(theme_path):
-        logging.error("Theme %s not found at %s, skipping fix", PLYMOUTH_THEME, theme_path)
-        return
-
-    # Set the theme via plymouth command (updates plymouthd.conf)
-    result = subprocess.run(
-        ['plymouth-set-default-theme', PLYMOUTH_THEME],
-        capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        logging.error("plymouth-set-default-theme failed: %s", result.stderr)
-        return
-
-    # Rebuild initramfs so boot splash matches
-    logging.info("Rebuilding initramfs with theme %s...", PLYMOUTH_THEME)
-    result = subprocess.run(
-        ['update-initramfs', '-u'],
-        capture_output=True, text=True, timeout=300
-    )
-    if result.returncode == 0:
-        logging.info("Plymouth theme fix applied — %s in rootfs + initramfs", PLYMOUTH_THEME)
-    else:
-        logging.error("update-initramfs failed: %s", result.stderr)
-
 
 # === REPO INSTALL REPAIR ===
 # Tracks install.sh hash per repo. If changed (or first run), re-executes it.
@@ -352,12 +297,6 @@ def main():
         fix_cpu_governor()
     except Exception as e:
         logging.error("CPU governor fix failed: %s", e)
-
-    # Fix Plymouth theme if overwritten by armbian-plymouth-theme upgrade
-    try:
-        fix_plymouth_theme()
-    except Exception as e:
-        logging.error("Plymouth theme fix failed: %s", e)
 
     # Run install repair before main sync loop
     try:
