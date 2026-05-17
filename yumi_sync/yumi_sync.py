@@ -218,7 +218,7 @@ def fix_cpu_governor():
 # We force hexagon_alt back and rebuild initramfs so boot splash stays consistent.
 
 PLYMOUTH_CONF = '/etc/plymouth/plymouthd.conf'
-PLYMOUTH_THEME = 'hexagon_alt'
+PLYMOUTH_THEME = 'yumi-klipper'
 
 def fix_plymouth_theme():
     # Only run on Bookworm (Debian 12)
