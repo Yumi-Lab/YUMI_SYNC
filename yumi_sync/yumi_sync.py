@@ -215,10 +215,11 @@ def fix_cpu_governor():
 
 # === PLYMOUTH THEME FIX (Bookworm only) ===
 # armbian-plymouth-theme postinst overwrites plymouthd.conf with Theme=armbian on every upgrade.
-# We force hexagon_alt back and rebuild initramfs so boot splash stays consistent.
+# Restore our theme: prefer yumi-klipper, fallback to hexagon_alt.
 
 PLYMOUTH_CONF = '/etc/plymouth/plymouthd.conf'
-PLYMOUTH_THEME = 'yumi-klipper'
+PLYMOUTH_THEMES_DIR = '/usr/share/plymouth/themes'
+PLYMOUTH_PREFERRED = ['yumi-klipper', 'hexagon_alt']
 
 def fix_plymouth_theme():
     # Only run on Bookworm (Debian 12)
@@ -230,27 +231,31 @@ def fix_plymouth_theme():
     except Exception:
         return
 
-    # Check if theme is already correct
+    # Find the best available theme
+    target_theme = None
+    for theme in PLYMOUTH_PREFERRED:
+        theme_path = os.path.join(PLYMOUTH_THEMES_DIR, theme, f'{theme}.plymouth')
+        if os.path.isfile(theme_path):
+            target_theme = theme
+            break
+
+    if not target_theme:
+        return
+
+    # Check if already correct
     try:
         with open(PLYMOUTH_CONF, 'r') as f:
             current = f.read()
-        if 'Theme=' + PLYMOUTH_THEME in current:
+        if f'Theme={target_theme}' in current:
             return
     except FileNotFoundError:
         return
 
     # Theme was overwritten (likely by armbian-plymouth-theme upgrade)
-    logging.info("Plymouth theme was changed, restoring %s...", PLYMOUTH_THEME)
+    logging.info("Plymouth theme was changed, restoring %s...", target_theme)
 
-    # Check the theme actually exists
-    theme_path = f'/usr/share/plymouth/themes/{PLYMOUTH_THEME}/{PLYMOUTH_THEME}.plymouth'
-    if not os.path.isfile(theme_path):
-        logging.error("Theme %s not found at %s, skipping fix", PLYMOUTH_THEME, theme_path)
-        return
-
-    # Set the theme via plymouth command (updates plymouthd.conf)
     result = subprocess.run(
-        ['plymouth-set-default-theme', PLYMOUTH_THEME],
+        ['plymouth-set-default-theme', target_theme],
         capture_output=True, text=True
     )
     if result.returncode != 0:
@@ -258,13 +263,13 @@ def fix_plymouth_theme():
         return
 
     # Rebuild initramfs so boot splash matches
-    logging.info("Rebuilding initramfs with theme %s...", PLYMOUTH_THEME)
+    logging.info("Rebuilding initramfs with theme %s...", target_theme)
     result = subprocess.run(
         ['update-initramfs', '-u'],
         capture_output=True, text=True, timeout=300
     )
     if result.returncode == 0:
-        logging.info("Plymouth theme fix applied — %s in rootfs + initramfs", PLYMOUTH_THEME)
+        logging.info("Plymouth theme fix applied — %s in rootfs + initramfs", target_theme)
     else:
         logging.error("update-initramfs failed: %s", result.stderr)
 
