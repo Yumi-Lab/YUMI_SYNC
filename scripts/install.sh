@@ -94,7 +94,9 @@ install_service() {
 generate_moonraker_update() {
     local config_file="/home/pi/printer_data/config/update_yumi_sync.cfg"
     # Remove old filename if exists
-    rm -f "/home/pi/printer_data/config/update_YUMI_SYNC.cfg"
+    if [[ -f "/home/pi/printer_data/config/update_YUMI_SYNC.cfg" ]]; then
+        rm "/home/pi/printer_data/config/update_YUMI_SYNC.cfg"
+    fi
     cat <<EOL > "${config_file}"
 [update_manager yumi_sync]
 type: git_repo
