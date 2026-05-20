@@ -102,7 +102,7 @@ path: ~/YUMI_SYNC
 origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
 primary_branch: main
 managed_services: yumi_sync
-install_script: scripts/install.sh
+requirements: requirements.txt
 system_dependencies: system_dependencies.json
 EOL
     chmod 644 "${config_file}"
