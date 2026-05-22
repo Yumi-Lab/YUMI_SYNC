@@ -359,6 +359,7 @@ def repair_repos():
                 'USER': 'pi',
                 'LOGNAME': 'pi',
                 'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+                'MOONRAKER_PROCESS_UID': '1',  # Signal to install.sh: this is an update, not first install
             })
             result = subprocess.run(
                 cmd,
