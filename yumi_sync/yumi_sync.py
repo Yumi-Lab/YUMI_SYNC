@@ -136,7 +136,6 @@ path: ~/YUMI_SYNC
 origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
 primary_branch: main
 managed_services: yumi_sync
-requirements: requirements.txt
 system_dependencies: system_dependencies.json
 """
     # Check if old uppercase config exists
@@ -153,7 +152,7 @@ system_dependencies: system_dependencies.json
             content = f.read()
         if ('managed_services: YUMI_SYNC' in content
                 or 'install_script' in content
-                or 'requirements' not in content
+                or 'requirements:' in content
                 or 'system_dependencies' not in content):
             needs_fix = True
     else:
