@@ -65,10 +65,11 @@ After=network-online.target
 
 [Service]
 Type=simple
+ExecStartPre=/bin/bash ${INSTALL_DIR}/scripts/ensure_venv.sh
 ExecStart=${INSTALL_DIR}/venv/bin/python ${INSTALL_DIR}/yumi_sync/yumi_sync.py
 WorkingDirectory=${INSTALL_DIR}
 Restart=always
-User=${BASE_USER}
+User=root
 TimeoutStartSec=300
 StandardOutput=append:/var/log/yumi_sync.log
 StandardError=append:/var/log/yumi_sync.log
