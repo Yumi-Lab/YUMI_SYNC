@@ -88,6 +88,40 @@ def save_state(state):
     except Exception as e:
         logging.error("Failed to write state file: %s", e)
 
+# === SELF-REPAIR: Fix systemd service file ===
+# Ensure ExecStartPre is present to auto-recreate venv if missing
+
+def fix_own_service_file():
+    service_file = '/etc/systemd/system/yumi_sync.service'
+    ensure_script = '/home/pi/YUMI_SYNC/scripts/ensure_venv.sh'
+    exec_start_pre = 'ExecStartPre=/bin/bash %s' % ensure_script
+
+    if not os.path.isfile(ensure_script):
+        return
+
+    try:
+        with open(service_file, 'r') as f:
+            content = f.read()
+
+        if 'ExecStartPre' in content:
+            return  # Already patched
+
+        # Insert ExecStartPre before ExecStart
+        new_content = content.replace(
+            'ExecStart=',
+            '%s\nExecStart=' % exec_start_pre,
+            1
+        )
+
+        with open(service_file, 'w') as f:
+            f.write(new_content)
+
+        subprocess.run(['systemctl', 'daemon-reload'], check=True)
+        logging.info("Service file updated with ExecStartPre for venv auto-repair")
+
+    except Exception as e:
+        logging.error("Failed to fix service file: %s", e)
+
 # === SELF-REPAIR: Fix Moonraker update config ===
 # Old installs have managed_services: YUMI_SYNC (uppercase) but systemd service is yumi_sync (lowercase)
 
@@ -346,6 +380,12 @@ def repair_repos():
             logging.error("Repo %s: install.sh error: %s", repo['name'], e)
 
 def main():
+    # Fix own service file (add ExecStartPre for venv auto-repair)
+    try:
+        fix_own_service_file()
+    except Exception as e:
+        logging.error("Service file fix failed: %s", e)
+
     # Fix own moonraker config (uppercase -> lowercase service name)
     try:
         fix_own_moonraker_config()
