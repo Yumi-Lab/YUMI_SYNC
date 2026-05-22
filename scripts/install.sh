@@ -97,6 +97,10 @@ generate_moonraker_update() {
     if [[ -f "/home/pi/printer_data/config/update_YUMI_SYNC.cfg" ]]; then
         rm "/home/pi/printer_data/config/update_YUMI_SYNC.cfg"
     fi
+    # Fix legacy: remove deprecated install_script line if present
+    if [[ -f "${config_file}" ]]; then
+        sed -i '/^install_script:/d' "${config_file}"
+    fi
     cat <<EOL > "${config_file}"
 [update_manager yumi_sync]
 type: git_repo
