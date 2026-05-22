@@ -130,13 +130,13 @@ def fix_own_moonraker_config():
         '/home/pi/printer_data/config/update_YUMI_SYNC.cfg',
         '/home/pi/printer_data/config/update_yumi_sync.cfg',
     ]
-    correct_config = """# YUMI_SYNC update_manager entry
-[update_manager yumi_sync]
+    correct_config = """[update_manager yumi_sync]
 type: git_repo
 path: ~/YUMI_SYNC
 origin: https://github.com/Yumi-Lab/YUMI_SYNC.git
 primary_branch: main
 managed_services: yumi_sync
+requirements: requirements.txt
 system_dependencies: system_dependencies.json
 """
     # Check if old uppercase config exists
@@ -151,7 +151,10 @@ system_dependencies: system_dependencies.json
     if os.path.isfile(new_cfg):
         with open(new_cfg, 'r') as f:
             content = f.read()
-        if 'managed_services: YUMI_SYNC' in content or 'system_dependencies' not in content:
+        if ('managed_services: YUMI_SYNC' in content
+                or 'install_script' in content
+                or 'requirements' not in content
+                or 'system_dependencies' not in content):
             needs_fix = True
     else:
         needs_fix = True
