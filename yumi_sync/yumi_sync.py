@@ -310,6 +310,49 @@ def fix_plymouth_theme():
         logging.error("update-initramfs failed: %s", result.stderr)
 
 
+# === KLIPPER MCU (LINUX) PRIORITY FIX ===
+# klipper_mcu runs as a Linux process using a software timer (no hardware crystal).
+# Without elevated priority, the timer drifts (~49.998 MHz vs 50 MHz target) and
+# Klipper reports clock frequency errors.  Setting Nice=-20 gives the process
+# highest non-RT priority, which keeps the timer accurate.
+
+KLIPPER_MCU_SERVICE = '/etc/systemd/system/klipper-mcu.service'
+
+def fix_klipper_mcu_priority():
+    if not os.path.isfile(KLIPPER_MCU_SERVICE):
+        return  # No linux MCU on this machine
+
+    try:
+        with open(KLIPPER_MCU_SERVICE, 'r') as f:
+            content = f.read()
+    except Exception as e:
+        logging.error("Cannot read %s: %s", KLIPPER_MCU_SERVICE, e)
+        return
+
+    if 'Nice=-20' in content:
+        return  # Already patched
+
+    # Insert Nice=-20 in [Service] section, before ExecStart
+    if 'ExecStart=' not in content:
+        logging.error("klipper-mcu.service has no ExecStart line, skipping fix")
+        return
+
+    new_content = content.replace(
+        'ExecStart=',
+        'Nice=-20\nExecStart=',
+        1
+    )
+
+    try:
+        with open(KLIPPER_MCU_SERVICE, 'w') as f:
+            f.write(new_content)
+        subprocess.run(['systemctl', 'daemon-reload'], check=True)
+        subprocess.run(['systemctl', 'restart', 'klipper-mcu'], capture_output=True)
+        logging.info("klipper-mcu.service patched with Nice=-20, restarted")
+    except Exception as e:
+        logging.error("Failed to fix klipper-mcu priority: %s", e)
+
+
 # === REPO INSTALL REPAIR ===
 # Tracks install.sh hash per repo. If changed (or first run), re-executes it.
 # Moonraker only does git pull — it never runs install scripts.
@@ -406,6 +449,12 @@ def main():
         fix_plymouth_theme()
     except Exception as e:
         logging.error("Plymouth theme fix failed: %s", e)
+
+    # Fix klipper-mcu linux process priority (Nice=-20 for accurate 50MHz timer)
+    try:
+        fix_klipper_mcu_priority()
+    except Exception as e:
+        logging.error("klipper-mcu priority fix failed: %s", e)
 
     # Run install repair before main sync loop
     try:
