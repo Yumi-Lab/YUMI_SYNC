@@ -347,8 +347,10 @@ def fix_klipper_mcu_priority():
         with open(KLIPPER_MCU_SERVICE, 'w') as f:
             f.write(new_content)
         subprocess.run(['systemctl', 'daemon-reload'], check=True)
-        subprocess.run(['systemctl', 'restart', 'klipper-mcu'], capture_output=True)
-        logging.info("klipper-mcu.service patched with Nice=-20, restarted")
+        # Do NOT restart klipper-mcu here — it would kill the MCU socket
+        # while Klipper is running and cause a cascade of errors.
+        # The fix takes effect on next Pi reboot.
+        logging.info("klipper-mcu.service patched with Nice=-20 (active on next reboot)")
     except Exception as e:
         logging.error("Failed to fix klipper-mcu priority: %s", e)
 
