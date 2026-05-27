@@ -13,6 +13,10 @@ if [ ! -f "${VENV_PYTHON}" ]; then
     python3 -m venv "${VENV_DIR}"
     "${VENV_DIR}/bin/pip" install -r "${INSTALL_DIR}/requirements.txt"
     echo "[ensure_venv] venv created"
+else
+    # 1b. Venv exists — ensure all dependencies are installed
+    # (handles new deps added to requirements.txt after git pull)
+    "${VENV_DIR}/bin/pip" install --quiet -r "${INSTALL_DIR}/requirements.txt" 2>/dev/null
 fi
 
 # 2. Fix service file if it still points to wrong python or missing ExecStartPre

@@ -1,12 +1,19 @@
 import os
 import subprocess
 import time
+import threading
 import requests
 import hashlib
 import json
 import logging
 from datetime import datetime, timedelta
 import netifaces
+try:
+    import websocket
+    HAS_WEBSOCKET = True
+except ImportError:
+    HAS_WEBSOCKET = False
+    logging.warning("websocket-client not installed — MCU watchdog will use HTTP polling only")
 
 # === LOG CONFIGURATION ===
 logging.basicConfig(
@@ -23,6 +30,14 @@ server_url = "http://yumi-id.yumi-lab.com/upload"
 FORCED_INTERFACE = 'end0'
 POLL_INTERVAL = 30  # seconds
 CLIENT_BOOT_DELAY_DAYS = 15  # days after factory QC to detect client first boot
+
+# === MCU WATCHDOG CONFIG ===
+MOONRAKER_URL = "http://localhost:7125"
+MCU_WATCHDOG_MAX_RETRIES = 3
+MCU_WATCHDOG_RETRY_COOLDOWN = 30  # seconds between retry attempts
+MCU_WATCHDOG_BACKOFF_COOLDOWN = 300  # seconds after max retries exhausted
+MCU_ERROR_LOG = '/home/pi/printer_data/config/yumi_sync_log.cfg'
+MCU_ERROR_LOG_MAX_ENTRIES = 50
 
 def get_mac_address(interface_name):
     try:
@@ -427,6 +442,253 @@ def repair_repos():
         except Exception as e:
             logging.error("Repo %s: install.sh error: %s", repo['name'], e)
 
+# === MCU WATCHDOG (WebSocket) ===
+# Subscribes to Moonraker WebSocket notifications for instant MCU error detection.
+# On notify_klippy_shutdown / notify_klippy_disconnected, queries printer state
+# and sends FIRMWARE_RESTART immediately — no 30s polling delay.
+# Falls back to HTTP polling if WebSocket is unavailable.
+
+MOONRAKER_WS_URL = "ws://localhost:7125/websocket"
+
+MCU_ERROR_PATTERNS = [
+    "lost communication with mcu",
+    "timer too close",
+    "mcu shutdown",
+    "mcu_connect",
+    "can not update mcu",
+    "unable to connect",
+    "unable to open serial port",
+    "serial connection closed",
+    "timeout with mcu",
+    "communication timeout",
+    "mcu protocol error",
+]
+
+class McuWatchdog:
+    def __init__(self):
+        self.retry_count = 0
+        self.last_restart_time = 0
+        self._ws = None
+        self._ws_connected = False
+        self._ws_thread = None
+
+    # --- HTTP helpers (used by both WS callback and fallback polling) ---
+
+    def _get_printer_info(self):
+        try:
+            resp = requests.get(f"{MOONRAKER_URL}/printer/info", timeout=5)
+            resp.raise_for_status()
+            return resp.json().get('result', {})
+        except Exception:
+            return None
+
+    def _get_print_status(self):
+        try:
+            resp = requests.get(f"{MOONRAKER_URL}/printer/objects/query?print_stats", timeout=5)
+            resp.raise_for_status()
+            data = resp.json().get('result', {}).get('status', {}).get('print_stats', {})
+            return data.get('state', '')
+        except Exception:
+            return ''
+
+    def _is_mcu_error(self, message):
+        msg_lower = message.lower()
+        for pattern in MCU_ERROR_PATTERNS:
+            if pattern in msg_lower:
+                return True
+        return False
+
+    def _send_firmware_restart(self):
+        try:
+            resp = requests.post(f"{MOONRAKER_URL}/printer/firmware_restart", timeout=10)
+            resp.raise_for_status()
+            logging.info("[MCU-WATCHDOG] FIRMWARE_RESTART sent successfully")
+            return True
+        except Exception as e:
+            logging.warning("[MCU-WATCHDOG] FIRMWARE_RESTART failed: %s", e)
+            return False
+
+    def _send_klipper_restart(self):
+        try:
+            resp = requests.post(f"{MOONRAKER_URL}/printer/restart", timeout=10)
+            resp.raise_for_status()
+            logging.info("[MCU-WATCHDOG] Full Klipper restart sent")
+            return True
+        except Exception as e:
+            logging.warning("[MCU-WATCHDOG] Full Klipper restart failed: %s", e)
+            return False
+
+    # --- Persistent error log (visible in Mainsail file browser) ---
+
+    def _log_mcu_error(self, state, message):
+        """Append error to mcu_error.log in config dir, keep last N entries."""
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        entry = f"[{timestamp}] state={state} | {message}"
+
+        try:
+            # Read existing entries
+            lines = []
+            if os.path.isfile(MCU_ERROR_LOG):
+                with open(MCU_ERROR_LOG, 'r') as f:
+                    lines = [l.rstrip('\n') for l in f.readlines() if l.strip()]
+
+            # Append new entry, trim to max
+            lines.append(entry)
+            lines = lines[-MCU_ERROR_LOG_MAX_ENTRIES:]
+
+            with open(MCU_ERROR_LOG, 'w') as f:
+                f.write('\n'.join(lines) + '\n')
+
+        except Exception as e:
+            logging.error("[MCU-WATCHDOG] Failed to write %s: %s", MCU_ERROR_LOG, e)
+
+    # --- Core logic: attempt recovery ---
+
+    def _attempt_recovery(self, state, message):
+        """Attempt MCU recovery with retry/backoff logic. Thread-safe via GIL."""
+        # Log every MCU error to persistent file (before any skip/cooldown)
+        self._log_mcu_error(state, message)
+
+        # Skip if actively printing — but only if Klipper is still functional.
+        # When Klipper is in shutdown, the print is dead anyway and print_stats
+        # may still report 'paused'/'printing' as stale state.
+        print_status = self._get_print_status()
+        if print_status in ('printing', 'paused') and state not in ('shutdown',):
+            logging.warning("[MCU-WATCHDOG] MCU error but print is %s — skipping", print_status)
+            return
+
+        now = time.time()
+
+        # Backoff: exhausted max retries
+        if self.retry_count >= MCU_WATCHDOG_MAX_RETRIES:
+            if (now - self.last_restart_time) < MCU_WATCHDOG_BACKOFF_COOLDOWN:
+                return
+            logging.warning("[MCU-WATCHDOG] Backoff expired, resetting retry counter")
+            self.retry_count = 0
+
+        # Cooldown between attempts
+        if self.retry_count > 0 and (now - self.last_restart_time) < MCU_WATCHDOG_RETRY_COOLDOWN:
+            return
+
+        self.retry_count += 1
+        self.last_restart_time = now
+        logging.warning("[MCU-WATCHDOG] MCU error (attempt %d/%d): state=%s msg=%s",
+                        self.retry_count, MCU_WATCHDOG_MAX_RETRIES, state, message[:200])
+
+        if self.retry_count <= 2:
+            self._send_firmware_restart()
+        else:
+            logging.warning("[MCU-WATCHDOG] FIRMWARE_RESTART failed %d times, full restart",
+                            self.retry_count - 1)
+            self._send_klipper_restart()
+
+    # --- WebSocket callbacks ---
+
+    def _on_ws_message(self, ws, raw):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return
+
+        method = data.get('method', '')
+
+        # Moonraker pushes these when Klipper loses connection or shuts down
+        if method in ('notify_klippy_shutdown', 'notify_klippy_disconnected'):
+            logging.info("[MCU-WATCHDOG] WS event: %s", method)
+            # Wait for Klipper to settle — after SAVE_CONFIG it goes through
+            # shutdown → disconnected → startup → error, takes ~5-10s
+            time.sleep(8)
+            info = self._get_printer_info()
+            if not info:
+                # Moonraker still up but Klipper not responding yet, retry once
+                time.sleep(5)
+                info = self._get_printer_info()
+            if not info:
+                logging.warning("[MCU-WATCHDOG] Cannot reach Moonraker after %s", method)
+                return
+            state = info.get('state', '')
+            message = info.get('state_message', '')
+            logging.info("[MCU-WATCHDOG] Post-event state=%s msg=%s", state, message[:200])
+            # If Klipper is still stuck after 8s, attempt recovery regardless
+            # of the error message — any shutdown/error that doesn't self-resolve
+            # needs a FIRMWARE_RESTART
+            if state in ('error', 'shutdown'):
+                self._attempt_recovery(state, message)
+
+        # Klipper is back online — reset retry counter
+        elif method == 'notify_klippy_ready':
+            if self.retry_count > 0:
+                logging.info("[MCU-WATCHDOG] Klipper recovered after %d attempt(s)", self.retry_count)
+                self.retry_count = 0
+
+    def _on_ws_open(self, ws):
+        self._ws_connected = True
+        logging.info("[MCU-WATCHDOG] WebSocket connected to Moonraker")
+
+    def _on_ws_close(self, ws, close_status_code, close_msg):
+        self._ws_connected = False
+        logging.warning("[MCU-WATCHDOG] WebSocket disconnected (code=%s)", close_status_code)
+
+    def _on_ws_error(self, ws, error):
+        self._ws_connected = False
+        logging.warning("[MCU-WATCHDOG] WebSocket error: %s", error)
+
+    # --- Start WebSocket listener in daemon thread ---
+
+    def start(self):
+        """Start the WebSocket listener thread. Call once from main()."""
+        if not HAS_WEBSOCKET:
+            logging.info("[MCU-WATCHDOG] No websocket-client, running in HTTP polling mode only")
+            return
+
+        def _ws_loop():
+            while True:
+                try:
+                    self._ws = websocket.WebSocketApp(
+                        MOONRAKER_WS_URL,
+                        on_message=self._on_ws_message,
+                        on_open=self._on_ws_open,
+                        on_close=self._on_ws_close,
+                        on_error=self._on_ws_error,
+                    )
+                    self._ws.run_forever(ping_interval=30, ping_timeout=10)
+                except Exception as e:
+                    logging.error("[MCU-WATCHDOG] WS loop error: %s", e)
+                # Reconnect after 5s if disconnected
+                self._ws_connected = False
+                time.sleep(5)
+
+        self._ws_thread = threading.Thread(target=_ws_loop, name="mcu-watchdog-ws", daemon=True)
+        self._ws_thread.start()
+        logging.info("[MCU-WATCHDOG] WebSocket listener started (thread=%s)", self._ws_thread.name)
+
+    # --- Fallback: poll check (called from main loop if WS is down) ---
+
+    def check(self):
+        """Fallback polling check — only runs if WebSocket is not connected."""
+        if self._ws_connected:
+            return  # WS is handling it in real-time
+
+        info = self._get_printer_info()
+        if not info:
+            return
+
+        state = info.get('state', '')
+        message = info.get('state_message', '')
+
+        if state == 'ready':
+            if self.retry_count > 0:
+                logging.info("[MCU-WATCHDOG] Klipper recovered after %d attempt(s)", self.retry_count)
+                self.retry_count = 0
+            return
+
+        if state == 'startup':
+            return
+
+        if state in ('error', 'shutdown'):
+            self._attempt_recovery(state, message)
+
+
 def main():
     # Fix own service file (add ExecStartPre for venv auto-repair)
     try:
@@ -508,9 +770,17 @@ def main():
 
     logging.info("Yumi Sync client started (poll every %ds)", POLL_INTERVAL)
 
-    # Main loop: only send on file change
+    # Initialize MCU watchdog (WebSocket + HTTP fallback)
+    mcu_watchdog = McuWatchdog()
+    mcu_watchdog.start()
+    logging.info("[MCU-WATCHDOG] Active (ws=%s, max_retries=%d, cooldown=%ds, backoff=%ds)",
+                 MOONRAKER_WS_URL, MCU_WATCHDOG_MAX_RETRIES,
+                 MCU_WATCHDOG_RETRY_COOLDOWN, MCU_WATCHDOG_BACKOFF_COOLDOWN)
+
+    # Main loop: config sync + MCU watchdog
     while True:
         try:
+            # --- Config file sync ---
             current_hash = calculate_file_hash(file_to_monitor)
 
             if current_hash and current_hash != previous_hash:
@@ -521,6 +791,12 @@ def main():
                     previous_hash = current_hash
                 except Exception as e:
                     logging.error("Send failed: %s", e)
+
+            # --- MCU watchdog ---
+            try:
+                mcu_watchdog.check()
+            except Exception as e:
+                logging.error("[MCU-WATCHDOG] Check failed: %s", e)
 
             time.sleep(POLL_INTERVAL)
 
