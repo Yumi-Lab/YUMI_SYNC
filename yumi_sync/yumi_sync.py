@@ -596,11 +596,10 @@ class McuWatchdog:
         if method in ('notify_klippy_shutdown', 'notify_klippy_disconnected'):
             logging.info("[MCU-WATCHDOG] WS event: %s", method)
             # Wait for Klipper to settle — after SAVE_CONFIG it goes through
-            # shutdown → disconnected → startup → error, takes ~5-10s
+            # shutdown → disconnected → startup → ready/error, takes ~5-15s
             time.sleep(8)
             info = self._get_printer_info()
             if not info:
-                # Moonraker still up but Klipper not responding yet, retry once
                 time.sleep(5)
                 info = self._get_printer_info()
             if not info:
@@ -608,10 +607,15 @@ class McuWatchdog:
                 return
             state = info.get('state', '')
             message = info.get('state_message', '')
+            # If still in startup, wait longer — Klipper may settle into error
+            if state == 'startup':
+                logging.info("[MCU-WATCHDOG] Post-event state=startup, waiting for settle...")
+                time.sleep(15)
+                info = self._get_printer_info()
+                if info:
+                    state = info.get('state', '')
+                    message = info.get('state_message', '')
             logging.info("[MCU-WATCHDOG] Post-event state=%s msg=%s", state, message[:200])
-            # If Klipper is still stuck after 8s, attempt recovery regardless
-            # of the error message — any shutdown/error that doesn't self-resolve
-            # needs a FIRMWARE_RESTART
             if state in ('error', 'shutdown'):
                 self._attempt_recovery(state, message)
 
