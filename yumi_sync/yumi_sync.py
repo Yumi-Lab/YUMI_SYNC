@@ -616,14 +616,19 @@ class McuWatchdog:
                     state = info.get('state', '')
                     message = info.get('state_message', '')
             logging.info("[MCU-WATCHDOG] Post-event state=%s msg=%s", state, message[:200])
-            if state in ('error', 'shutdown'):
+            if state == 'ready':
+                # Klipper recovered on its own (e.g. SAVE_CONFIG normal cycle)
+                if self.retry_count > 0:
+                    logging.info("[MCU-WATCHDOG] Klipper recovered after %d attempt(s)", self.retry_count)
+                    self.retry_count = 0
+            elif state in ('error', 'shutdown'):
                 self._attempt_recovery(state, message)
 
         # Klipper is back online — reset retry counter
         elif method == 'notify_klippy_ready':
             if self.retry_count > 0:
                 logging.info("[MCU-WATCHDOG] Klipper recovered after %d attempt(s)", self.retry_count)
-                self.retry_count = 0
+            self.retry_count = 0
 
     def _on_ws_open(self, ws):
         self._ws_connected = True
@@ -669,10 +674,7 @@ class McuWatchdog:
     # --- Fallback: poll check (called from main loop if WS is down) ---
 
     def check(self):
-        """Fallback polling check — only runs if WebSocket is not connected."""
-        if self._ws_connected:
-            return  # WS is handling it in real-time
-
+        """Polling check — runs every loop as safety net even when WS is connected."""
         info = self._get_printer_info()
         if not info:
             return
