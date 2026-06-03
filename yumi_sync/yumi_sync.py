@@ -380,7 +380,15 @@ MANAGED_REPOS = [
     {'name': 'YUMI_PLR', 'path': '/home/pi/YUMI_PLR', 'script': 'install.sh'},
     {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},       # V1
     {'name': 'moonraker-app-yumi-lab', 'path': '/home/pi/moonraker-app-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},  # V2
+    {'name': 'Yumi-YMS-Manager', 'path': '/home/pi/Yumi-YMS-Manager', 'script': 'install.sh'},
 ]
+
+# === MAINSAIL → YMS-MANAGER DEPENDENCY ===
+# Yumi-YMS-Manager injects a JS script into Mainsail's static files.
+# When Moonraker updates Mainsail (web type = zip extract), the injection is lost.
+# Track Mainsail's index.html hash — if it changes, re-run YMS-Manager install.sh.
+MAINSAIL_INDEX = '/home/pi/mainsail/index.html'
+MAINSAIL_HASH_KEY = '_mainsail_index_hash'
 
 def _load_install_state():
     try:
@@ -441,6 +449,65 @@ def repair_repos():
             logging.error("Repo %s: install.sh timed out (300s)", repo['name'])
         except Exception as e:
             logging.error("Repo %s: install.sh error: %s", repo['name'], e)
+
+
+def repair_mainsail_yms():
+    """Re-run Yumi-YMS-Manager install.sh when Mainsail has been updated.
+
+    Mainsail is a web-type update (zip extract) — Moonraker replaces all static
+    files, which wipes the JS injection done by YMS-Manager.  We track the hash
+    of Mainsail's index.html; when it changes we re-execute the YMS installer.
+
+    Safe no-op when Yumi-YMS-Manager is not installed.
+    """
+    yms_path = '/home/pi/Yumi-YMS-Manager'
+    yms_script = os.path.join(yms_path, 'install.sh')
+
+    # Skip entirely if YMS-Manager is not installed on this machine
+    if not os.path.isfile(yms_script):
+        return
+
+    # Skip if Mainsail is not installed
+    if not os.path.isfile(MAINSAIL_INDEX):
+        return
+
+    install_state = _load_install_state()
+    current_hash = calculate_file_hash(MAINSAIL_INDEX)
+    if not current_hash:
+        return
+
+    saved_hash = install_state.get(MAINSAIL_HASH_KEY)
+    if current_hash == saved_hash:
+        return  # Mainsail unchanged
+
+    logging.info("Mainsail updated (index.html hash %s -> %s), re-running YMS-Manager install.sh...",
+                 saved_hash or 'NONE', current_hash)
+    try:
+        env = os.environ.copy()
+        env.update({
+            'HOME': '/home/pi',
+            'USER': 'pi',
+            'LOGNAME': 'pi',
+            'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        })
+        result = subprocess.run(
+            ['bash', 'install.sh'],
+            cwd=yms_path,
+            env=env,
+            capture_output=True, text=True, timeout=300
+        )
+        if result.returncode == 0:
+            logging.info("YMS-Manager re-installed after Mainsail update")
+            install_state[MAINSAIL_HASH_KEY] = current_hash
+            _save_install_state(install_state)
+        else:
+            logging.error("YMS-Manager reinstall failed (exit %d)\nstderr: %s",
+                          result.returncode, result.stderr[-500:] if result.stderr else '')
+    except subprocess.TimeoutExpired:
+        logging.error("YMS-Manager reinstall timed out (300s)")
+    except Exception as e:
+        logging.error("YMS-Manager reinstall error: %s", e)
+
 
 # === MCU WATCHDOG (WebSocket) ===
 # Subscribes to Moonraker WebSocket notifications for instant MCU error detection.
@@ -595,29 +662,25 @@ class McuWatchdog:
         # Moonraker pushes these when Klipper loses connection or shuts down
         if method in ('notify_klippy_shutdown', 'notify_klippy_disconnected'):
             logging.info("[MCU-WATCHDOG] WS event: %s", method)
-            # Wait for Klipper to settle — after SAVE_CONFIG it goes through
-            # shutdown → disconnected → startup → ready/error, takes ~5-15s
-            time.sleep(8)
-            info = self._get_printer_info()
-            if not info:
-                time.sleep(5)
+            # Fast-poll every 2s until Klipper settles (max 20s).
+            # SAVE_CONFIG goes: shutdown → startup → ready (~8-12s)
+            # MCU error goes: shutdown → startup → error (~10-15s)
+            # React as soon as state is no longer startup/disconnected.
+            time.sleep(2)
+            state = ''
+            message = ''
+            for i in range(10):
                 info = self._get_printer_info()
-            if not info:
-                logging.warning("[MCU-WATCHDOG] Cannot reach Moonraker after %s", method)
-                return
-            state = info.get('state', '')
-            message = info.get('state_message', '')
-            # If still in startup, wait longer — Klipper may settle into error
-            if state == 'startup':
-                logging.info("[MCU-WATCHDOG] Post-event state=startup, waiting for settle...")
-                time.sleep(15)
-                info = self._get_printer_info()
-                if info:
-                    state = info.get('state', '')
-                    message = info.get('state_message', '')
+                if not info:
+                    time.sleep(2)
+                    continue
+                state = info.get('state', '')
+                message = info.get('state_message', '')
+                if state not in ('startup', 'disconnected', ''):
+                    break
+                time.sleep(2)
             logging.info("[MCU-WATCHDOG] Post-event state=%s msg=%s", state, message[:200])
             if state == 'ready':
-                # Klipper recovered on its own (e.g. SAVE_CONFIG normal cycle)
                 if self.retry_count > 0:
                     logging.info("[MCU-WATCHDOG] Klipper recovered after %d attempt(s)", self.retry_count)
                     self.retry_count = 0
@@ -732,6 +795,12 @@ def main():
     except Exception as e:
         logging.error("Repo repair failed: %s", e)
 
+    # Re-inject YMS-Manager into Mainsail if Mainsail was updated
+    try:
+        repair_mainsail_yms()
+    except Exception as e:
+        logging.error("Mainsail→YMS repair failed: %s", e)
+
     state = load_state()
     previous_hash = state.get('last_hash')
 
@@ -797,6 +866,12 @@ def main():
                     previous_hash = current_hash
                 except Exception as e:
                     logging.error("Send failed: %s", e)
+
+            # --- Mainsail → YMS-Manager re-injection ---
+            try:
+                repair_mainsail_yms()
+            except Exception as e:
+                logging.error("Mainsail→YMS check failed: %s", e)
 
             # --- MCU watchdog ---
             try:
