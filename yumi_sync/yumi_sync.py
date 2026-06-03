@@ -565,11 +565,29 @@ def _klipper_pyc_is_stale():
             return False
     return True  # pyc(s) present, none carry the lead -> stale
 
+def _file_contains_lead(path):
+    """True if the file's bytes contain the lead marker."""
+    try:
+        with open(path, 'rb') as f:
+            return LEAD_MARKER in f.read()
+    except OSError:
+        return False
+
 def _klipper_lead_drift():
-    """Return (drifted, reason): deployed klipper file differs from yumi-config."""
-    for rel_dst, src in LEAD_PATCHED_FILES:
+    """Return (drifted, reason): deployed klipper file differs from yumi-config.
+
+    Fully no-op (never touches klipper) unless this machine is actually managed:
+    Klipper installed AND every patched source present in yumi-config.  This guards
+    the case where yumi-config is absent / not yet updated / has no lead patch —
+    we must never copy a missing source or act on a half-available repo.
+    """
+    if not os.path.isdir(KLIPPER_DIR):
+        return False, ''  # Klipper not installed — nothing to patch
+    # Require ALL sources present; otherwise we are not managed here -> do nothing.
+    for _rel_dst, src in LEAD_PATCHED_FILES:
         if not os.path.isfile(src):
-            return False, ''  # source absent — not managed on this machine
+            return False, ''
+    for rel_dst, src in LEAD_PATCHED_FILES:
         dst = os.path.join(KLIPPER_DIR, rel_dst)
         if not os.path.isfile(dst):
             return True, '%s missing in klipper' % rel_dst
@@ -580,7 +598,11 @@ def _klipper_lead_drift():
         if src_hash != dst_hash:
             return True, ('%s differs from yumi-config '
                           '(klipper restored to stock?)' % rel_dst)
-    if _klipper_pyc_is_stale():
+    # Deployed files already match the source.  Only flag a stale pycache when the
+    # source genuinely carries the lead — otherwise a lead-less .pyc is correct and
+    # we must NOT loop purge/restart every cycle.
+    extruder_dst = os.path.join(KLIPPER_DIR, 'klippy/kinematics/extruder.py')
+    if _file_contains_lead(extruder_dst) and _klipper_pyc_is_stale():
         return True, 'compiled __pycache__ lacks lead code (stale root pyc)'
     return False, ''
 
@@ -624,8 +646,13 @@ def repair_klipper_lead():
                      "deferring re-apply until idle.", reason)
         return
     logging.info("Klipper lead patch drift detected (%s) — re-applying...", reason)
-    # 1. Re-copy the patched files over klipper's (git may have restored stock)
+    # 1. Re-copy the patched files over klipper's (git may have restored stock).
+    #    Re-verify the source exists right before copying — if anything is missing
+    #    we abort WITHOUT touching klipper (no partial/half-applied state).
     for rel_dst, src in LEAD_PATCHED_FILES:
+        if not os.path.isfile(src):
+            logging.error("Lead repair: source missing (%s) — aborting, klipper untouched.", src)
+            return
         dst = os.path.join(KLIPPER_DIR, rel_dst)
         try:
             shutil.copyfile(src, dst)
