@@ -5,6 +5,7 @@ import threading
 import requests
 import hashlib
 import json
+import shutil
 import logging
 from datetime import datetime, timedelta
 import netifaces
@@ -509,6 +510,116 @@ def repair_mainsail_yms():
         logging.error("YMS-Manager reinstall error: %s", e)
 
 
+# === KLIPPER LEAD PATCH REPAIR ===
+# The extruder "lead_time" (anticipation / coast) patch is deployed as symlinks
+# from yumi-config over Klipper's extruder.py and motion_queuing.py.  Moonraker's
+# update_manager sees these as a "dirty" working tree and can hard-reset or
+# re-clone Klipper, restoring the stock files and leaving a STALE, root-owned
+# __pycache__ that Klipper (running as 'pi') cannot rewrite — so the lead code
+# silently dies (LEAD_TIME stops having any effect).  yumi-sync runs as ROOT, so
+# it can purge that pycache where Moonraker (pi) hits "Permission denied".
+#
+# Mirror of repair_mainsail_yms: an external update wipes our patch, so we detect
+# the drift on the REAL state (symlink + compiled bytecode) and re-apply.  This
+# is independent of yumi-config's install.sh hash — a Klipper update never
+# changes install.sh, so repair_repos() alone could never catch it.
+
+KLIPPER_DIR = '/home/pi/klipper'
+LEAD_SYMLINKS = [
+    # (link path relative to KLIPPER_DIR, absolute source inside yumi-config)
+    ('klippy/kinematics/extruder.py',
+     '/home/pi/yumi-config/klipper/klippy/kinematics/extruder.py'),
+    ('klippy/extras/motion_queuing.py',
+     '/home/pi/yumi-config/klipper/klippy/extras/motion_queuing.py'),
+]
+# String baked into the compiled bytecode when the lead patch is present.
+LEAD_MARKER = b'lead_time'
+
+def _klipper_pyc_is_stale():
+    """True if a compiled extruder*.pyc exists but carries no lead code.
+
+    Happens when a root-owned pycache (chroot build or a root recovery) survives
+    a source swap: Klipper-as-pi cannot overwrite it and keeps loading the old
+    lead-less bytecode.
+    """
+    pycache = os.path.join(KLIPPER_DIR, 'klippy/kinematics/__pycache__')
+    if not os.path.isdir(pycache):
+        return False  # nothing compiled yet — will build fresh from source
+    try:
+        pycs = [f for f in os.listdir(pycache)
+                if f.startswith('extruder.') and f.endswith('.pyc')]
+    except OSError:
+        return False
+    if not pycs:
+        return False
+    for name in pycs:
+        try:
+            with open(os.path.join(pycache, name), 'rb') as f:
+                if LEAD_MARKER in f.read():
+                    return False  # at least one compiled pyc carries the lead
+        except OSError:
+            return False
+    return True  # pyc(s) present, none carry the lead -> stale
+
+def _klipper_lead_drift():
+    """Return (drifted, reason) for the extruder lead patch."""
+    for rel_link, target in LEAD_SYMLINKS:
+        if not os.path.isfile(target):
+            return False, ''  # source absent — not managed on this machine
+        link = os.path.join(KLIPPER_DIR, rel_link)
+        if not os.path.islink(link):
+            return True, '%s is not a symlink (klipper reset to stock?)' % rel_link
+        if os.path.realpath(link) != os.path.realpath(target):
+            return True, '%s points away from yumi-config' % rel_link
+    if _klipper_pyc_is_stale():
+        return True, 'compiled __pycache__ lacks lead code (stale root pyc)'
+    return False, ''
+
+def _purge_klipper_pycache():
+    """Remove every __pycache__ under Klipper (root-owned ones included)."""
+    purged = 0
+    for root, dirs, _files in os.walk(KLIPPER_DIR):
+        if '__pycache__' in dirs:
+            try:
+                shutil.rmtree(os.path.join(root, '__pycache__'))
+                purged += 1
+            except Exception as e:
+                logging.error("Lead repair: cannot purge %s/__pycache__: %s", root, e)
+            dirs.remove('__pycache__')  # don't descend into a dir we just removed
+    return purged
+
+def repair_klipper_lead():
+    """Re-apply the extruder lead patch when Klipper has drifted.
+
+    Self-healing on every boot, regardless of what caused the drift (Moonraker
+    update, hard/soft recovery, manual reset).
+    """
+    drifted, reason = _klipper_lead_drift()
+    if not drifted:
+        return
+    logging.info("Klipper lead patch drift detected (%s) — re-applying...", reason)
+    # 1. Re-create the symlinks (a klipper reset may have restored stock files)
+    for rel_link, target in LEAD_SYMLINKS:
+        link = os.path.join(KLIPPER_DIR, rel_link)
+        try:
+            if os.path.lexists(link):
+                os.remove(link)
+            os.symlink(target, link)
+        except Exception as e:
+            logging.error("Lead repair: failed to symlink %s -> %s: %s",
+                          link, target, e)
+            return
+    # 2. Purge root-owned __pycache__ (yumi-sync is root; Moonraker-as-pi cannot)
+    purged = _purge_klipper_pycache()
+    logging.info("Lead repair: purged %d __pycache__ dir(s)", purged)
+    # 3. Restart Klipper so it recompiles fresh bytecode from the lead source
+    try:
+        subprocess.run(['systemctl', 'restart', 'klipper'], timeout=60)
+        logging.info("Lead repair: symlinks restored, pycache purged, klipper restarted")
+    except Exception as e:
+        logging.error("Lead repair: klipper restart failed: %s", e)
+
+
 # === MCU WATCHDOG (WebSocket) ===
 # Subscribes to Moonraker WebSocket notifications for instant MCU error detection.
 # On notify_klippy_shutdown / notify_klippy_disconnected, queries printer state
@@ -794,6 +905,12 @@ def main():
         repair_repos()
     except Exception as e:
         logging.error("Repo repair failed: %s", e)
+
+    # Re-apply the extruder lead patch if Klipper was updated / recovered / reset
+    try:
+        repair_klipper_lead()
+    except Exception as e:
+        logging.error("Klipper lead repair failed: %s", e)
 
     # Re-inject YMS-Manager into Mainsail if Mainsail was updated
     try:
