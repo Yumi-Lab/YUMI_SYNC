@@ -510,6 +510,76 @@ def repair_mainsail_yms():
         logging.error("YMS-Manager reinstall error: %s", e)
 
 
+# === MAINSAIL config.json REPAIR ===
+# Mainsail fetches /config.json at boot.  If the file is served as HTTP 200 with an
+# EMPTY (0-byte) or invalid body, response.json() throws and the whole app bootstrap
+# aborts BEFORE vue-i18n initialises -> every UI string renders as its raw i18n key
+# ("router.dashboard", "panels.miniconsolePanel.headline", ...) + assorted glitches.
+# (An ABSENT file -> 404 -> Mainsail handles gracefully; only the 0-byte/invalid 200
+# is fatal.)
+#
+# How it breaks: a Moonraker web-type Mainsail update re-extracts mainsail.zip and
+# wipes the whole webroot (same reason repair_mainsail_yms exists); the canonical
+# config.json that yumi-config/install.sh deployed is lost, and a truncated/empty
+# placeholder can be left behind.  yumi-config/install.sh only re-runs on its OWN
+# install.sh hash change, so it does NOT heal this.  yumi-sync runs every poll cycle
+# as root, so it can self-heal: validate config.json and restore it from the
+# yumi-config template (or an embedded default) whenever it is missing/empty/invalid.
+MAINSAIL_CONFIG = '/home/pi/mainsail/config.json'
+MAINSAIL_CONFIG_TEMPLATE = '/home/pi/yumi-config/mainsail/config.json'
+# Embedded last-resort default, used only if the yumi-config template is unavailable.
+MAINSAIL_CONFIG_DEFAULT = {
+    "defaultLocale": "en",
+    "defaultMode": "dark",
+    "defaultTheme": "yumi",
+    "hostname": None,
+    "port": None,
+    "path": None,
+    "instancesDB": "moonraker",
+    "instances": [],
+}
+
+
+def _is_valid_json_file(path):
+    """True only if path exists, is non-empty, and parses as JSON."""
+    try:
+        if os.path.getsize(path) == 0:
+            return False
+        with open(path, 'r') as fh:
+            json.load(fh)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def repair_mainsail_config():
+    """Guarantee /home/pi/mainsail/config.json is valid non-empty JSON.
+
+    Cheap, idempotent: a no-op when the file is already valid.  Restores from the
+    yumi-config template when available, otherwise writes the embedded default.
+    Safe no-op when Mainsail is not installed.
+    """
+    # config.json only matters if Mainsail is actually installed here
+    if not os.path.isfile(MAINSAIL_INDEX):
+        return
+
+    if _is_valid_json_file(MAINSAIL_CONFIG):
+        return  # already healthy
+
+    logging.warning("Mainsail config.json missing/empty/invalid -> restoring (i18n would break otherwise)")
+    try:
+        if _is_valid_json_file(MAINSAIL_CONFIG_TEMPLATE):
+            shutil.copyfile(MAINSAIL_CONFIG_TEMPLATE, MAINSAIL_CONFIG)
+            logging.info("Mainsail config.json restored from yumi-config template")
+        else:
+            with open(MAINSAIL_CONFIG, 'w') as fh:
+                json.dump(MAINSAIL_CONFIG_DEFAULT, fh, indent=4)
+            logging.info("Mainsail config.json restored from embedded default")
+        shutil.chown(MAINSAIL_CONFIG, user='pi', group='pi')
+    except Exception as e:
+        logging.error("Mainsail config.json repair failed: %s", e)
+
+
 # === KLIPPER LEAD PATCH REPAIR ===
 # The extruder "lead_time" (anticipation / coast) patch lives in yumi-config and
 # is deployed by install.sh as REAL COPIES over Klipper's extruder.py and
@@ -968,6 +1038,12 @@ def main():
     except Exception as e:
         logging.error("Mainsail→YMS repair failed: %s", e)
 
+    # Ensure Mainsail's config.json is valid (empty/invalid -> i18n keys shown raw)
+    try:
+        repair_mainsail_config()
+    except Exception as e:
+        logging.error("Mainsail config.json repair failed: %s", e)
+
     state = load_state()
     previous_hash = state.get('last_hash')
 
@@ -1039,6 +1115,12 @@ def main():
                 repair_mainsail_yms()
             except Exception as e:
                 logging.error("Mainsail→YMS check failed: %s", e)
+
+            # --- Mainsail config.json integrity (empty/invalid -> raw i18n keys) ---
+            try:
+                repair_mainsail_config()
+            except Exception as e:
+                logging.error("Mainsail config.json check failed: %s", e)
 
             # --- Klipper lead patch re-apply (after a runtime klipper update) ---
             try:
