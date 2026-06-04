@@ -382,21 +382,14 @@ MANAGED_REPOS = [
     {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},       # V1
     {'name': 'moonraker-app-yumi-lab', 'path': '/home/pi/moonraker-app-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},  # V2
     {'name': 'Yumi-YMS-Manager', 'path': '/home/pi/Yumi-YMS-Manager', 'script': 'install.sh'},
-    {'name': 'Yumi_ANC', 'path': '/home/pi/Yumi_ANC', 'script': 'install.sh'},
 ]
 
-# === MAINSAIL → INJECTOR DEPENDENCY ===
-# Some repos inject a <script> tag into Mainsail's index.html (YMS-Manager's
-# native panel, Yumi_ANC's native panel). When Moonraker updates Mainsail
-# (web type = zip extract) it replaces all static files and the injection is
-# lost. Track Mainsail's index.html hash — if it changes, re-run each
-# injector's install.sh so the tag (and the sidebar button) is re-added.
+# === MAINSAIL → YMS-MANAGER DEPENDENCY ===
+# Yumi-YMS-Manager injects a JS script into Mainsail's static files.
+# When Moonraker updates Mainsail (web type = zip extract), the injection is lost.
+# Track Mainsail's index.html hash — if it changes, re-run YMS-Manager install.sh.
 MAINSAIL_INDEX = '/home/pi/mainsail/index.html'
 MAINSAIL_HASH_KEY = '_mainsail_index_hash'
-MAINSAIL_INJECTORS = [
-    {'name': 'Yumi-YMS-Manager', 'path': '/home/pi/Yumi-YMS-Manager'},
-    {'name': 'Yumi_ANC', 'path': '/home/pi/Yumi_ANC'},
-]
 
 def _load_install_state():
     try:
@@ -459,27 +452,25 @@ def repair_repos():
             logging.error("Repo %s: install.sh error: %s", repo['name'], e)
 
 
-def repair_mainsail_injections():
-    """Re-run each Mainsail injector's install.sh when Mainsail has been updated.
+def repair_mainsail_yms():
+    """Re-run Yumi-YMS-Manager install.sh when Mainsail has been updated.
 
     Mainsail is a web-type update (zip extract) — Moonraker replaces all static
-    files, which wipes the <script> tags injected into index.html by repos like
-    YMS-Manager and Yumi_ANC.  We track the hash of Mainsail's index.html; when
-    it changes we re-execute every installed injector so its panel/button is
-    re-added.
+    files, which wipes the JS injection done by YMS-Manager.  We track the hash
+    of Mainsail's index.html; when it changes we re-execute the YMS installer.
 
-    Safe no-op when Mainsail or a given injector is not installed.  The tracked
-    hash is only advanced once ALL installed injectors succeed, so a transient
-    failure is retried on the next cycle.
+    Safe no-op when Yumi-YMS-Manager is not installed.
     """
+    yms_path = '/home/pi/Yumi-YMS-Manager'
+    yms_script = os.path.join(yms_path, 'install.sh')
+
+    # Skip entirely if YMS-Manager is not installed on this machine
+    if not os.path.isfile(yms_script):
+        return
+
     # Skip if Mainsail is not installed
     if not os.path.isfile(MAINSAIL_INDEX):
         return
-
-    injectors = [i for i in MAINSAIL_INJECTORS
-                 if os.path.isfile(os.path.join(i['path'], 'install.sh'))]
-    if not injectors:
-        return  # no injector installed on this machine
 
     install_state = _load_install_state()
     current_hash = calculate_file_hash(MAINSAIL_INDEX)
@@ -490,45 +481,33 @@ def repair_mainsail_injections():
     if current_hash == saved_hash:
         return  # Mainsail unchanged
 
-    logging.info("Mainsail updated (index.html hash %s -> %s), re-running %d injector(s)...",
-                 saved_hash or 'NONE', current_hash, len(injectors))
-
-    env = os.environ.copy()
-    env.update({
-        'HOME': '/home/pi',
-        'USER': 'pi',
-        'LOGNAME': 'pi',
-        'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-    })
-
-    all_ok = True
-    for inj in injectors:
-        try:
-            result = subprocess.run(
-                ['bash', 'install.sh'],
-                cwd=inj['path'],
-                env=env,
-                capture_output=True, text=True, timeout=300
-            )
-            if result.returncode == 0:
-                logging.info("%s re-installed after Mainsail update", inj['name'])
-            else:
-                all_ok = False
-                logging.error("%s reinstall failed (exit %d)\nstderr: %s",
-                              inj['name'], result.returncode,
-                              result.stderr[-500:] if result.stderr else '')
-        except subprocess.TimeoutExpired:
-            all_ok = False
-            logging.error("%s reinstall timed out (300s)", inj['name'])
-        except Exception as e:
-            all_ok = False
-            logging.error("%s reinstall error: %s", inj['name'], e)
-
-    # Only remember this Mainsail revision once every injector re-applied
-    # cleanly; otherwise retry on the next cycle.
-    if all_ok:
-        install_state[MAINSAIL_HASH_KEY] = current_hash
-        _save_install_state(install_state)
+    logging.info("Mainsail updated (index.html hash %s -> %s), re-running YMS-Manager install.sh...",
+                 saved_hash or 'NONE', current_hash)
+    try:
+        env = os.environ.copy()
+        env.update({
+            'HOME': '/home/pi',
+            'USER': 'pi',
+            'LOGNAME': 'pi',
+            'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        })
+        result = subprocess.run(
+            ['bash', 'install.sh'],
+            cwd=yms_path,
+            env=env,
+            capture_output=True, text=True, timeout=300
+        )
+        if result.returncode == 0:
+            logging.info("YMS-Manager re-installed after Mainsail update")
+            install_state[MAINSAIL_HASH_KEY] = current_hash
+            _save_install_state(install_state)
+        else:
+            logging.error("YMS-Manager reinstall failed (exit %d)\nstderr: %s",
+                          result.returncode, result.stderr[-500:] if result.stderr else '')
+    except subprocess.TimeoutExpired:
+        logging.error("YMS-Manager reinstall timed out (300s)")
+    except Exception as e:
+        logging.error("YMS-Manager reinstall error: %s", e)
 
 
 # === KLIPPER LEAD PATCH REPAIR ===
@@ -543,7 +522,7 @@ def repair_mainsail_injections():
 #
 # yumi-sync runs as ROOT, so it can re-copy the patched files and purge that
 # pycache where Moonraker (pi) hits "Permission denied".  Mirror of
-# repair_mainsail_injections: an external update wipes our patch -> detect drift by HASH
+# repair_mainsail_yms: an external update wipes our patch -> detect drift by HASH
 # (deployed klipper file vs yumi-config source) and re-apply.  Independent of
 # install.sh's hash, so it catches Klipper-side updates that repair_repos() never
 # sees.  Called both at startup and in the poll loop (with an anti-print guard) so
@@ -983,11 +962,11 @@ def main():
     except Exception as e:
         logging.error("Klipper lead repair failed: %s", e)
 
-    # Re-inject Mainsail panels (YMS-Manager, ANC) if Mainsail was updated
+    # Re-inject YMS-Manager into Mainsail if Mainsail was updated
     try:
-        repair_mainsail_injections()
+        repair_mainsail_yms()
     except Exception as e:
-        logging.error("Mainsail injector repair failed: %s", e)
+        logging.error("Mainsail→YMS repair failed: %s", e)
 
     state = load_state()
     previous_hash = state.get('last_hash')
@@ -1055,11 +1034,11 @@ def main():
                 except Exception as e:
                     logging.error("Send failed: %s", e)
 
-            # --- Mainsail panel re-injection (YMS-Manager, ANC) ---
+            # --- Mainsail → YMS-Manager re-injection ---
             try:
-                repair_mainsail_injections()
+                repair_mainsail_yms()
             except Exception as e:
-                logging.error("Mainsail injector check failed: %s", e)
+                logging.error("Mainsail→YMS check failed: %s", e)
 
             # --- Klipper lead patch re-apply (after a runtime klipper update) ---
             try:
