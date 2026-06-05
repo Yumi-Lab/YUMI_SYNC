@@ -382,7 +382,9 @@ MANAGED_REPOS = [
     {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},       # V1
     {'name': 'moonraker-app-yumi-lab', 'path': '/home/pi/moonraker-app-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},  # V2
     {'name': 'Yumi-YMS-Manager', 'path': '/home/pi/Yumi-YMS-Manager', 'script': 'install.sh'},
-    {'name': 'Yumi_ANC', 'path': '/home/pi/Yumi_ANC', 'script': 'install.sh'},
+    # track:'head' -> re-run install.sh on EVERY pull, not just when install.sh
+    # changes, so the web cache-busting tag (?v=<commit>) bumps on any update.
+    {'name': 'Yumi_ANC', 'path': '/home/pi/Yumi_ANC', 'script': 'install.sh', 'track': 'head'},
 ]
 
 # === MAINSAIL → INJECTOR DEPENDENCY ===
@@ -412,13 +414,30 @@ def _save_install_state(state):
     except Exception as e:
         logging.error("Failed to write install state: %s", e)
 
+def _repo_head(path):
+    """Short HEAD commit of a git repo, or None. Lets a repo re-run install.sh on
+    every pull (track:'head') rather than only when install.sh itself changes."""
+    try:
+        r = subprocess.run(['git', '-C', path, 'rev-parse', '--short', 'HEAD'],
+                           capture_output=True, text=True, timeout=10)
+        return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+    except Exception as e:
+        logging.error("HEAD read failed for %s: %s", path, e)
+        return None
+
+
 def repair_repos():
     install_state = _load_install_state()
     for repo in MANAGED_REPOS:
         script_path = os.path.join(repo['path'], repo['script'])
         if not os.path.isfile(script_path):
             continue
-        current_hash = calculate_file_hash(script_path)
+        # track:'head' keys on the repo's commit (re-run on any pull); default
+        # keys on install.sh's hash (re-run only when the installer changes).
+        if repo.get('track') == 'head':
+            current_hash = _repo_head(repo['path']) or calculate_file_hash(script_path)
+        else:
+            current_hash = calculate_file_hash(script_path)
         if not current_hash:
             continue
         saved_hash = install_state.get(repo['name'])
