@@ -381,10 +381,16 @@ MANAGED_REPOS = [
     {'name': 'YUMI_PLR', 'path': '/home/pi/YUMI_PLR', 'script': 'install.sh'},
     {'name': 'moonraker-yumi-lab', 'path': '/home/pi/moonraker-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},       # V1
     {'name': 'moonraker-app-yumi-lab', 'path': '/home/pi/moonraker-app-yumi-lab', 'script': 'install.sh', 'args': ['-U', '-L']},  # V2
-    {'name': 'Yumi-YMS-Manager', 'path': '/home/pi/Yumi-YMS-Manager', 'script': 'install.sh'},
+    # 'origin' -> repos that MUST exist on every pad. If missing (fresh flash,
+    # or printer.cfg references their config section before the repo was cloned),
+    # repair_repos() git-clones them before running install.sh. Repos without an
+    # 'origin' (e.g. the conditional moonraker V1/V2 entries) are never auto-cloned.
+    {'name': 'Yumi-YMS-Manager', 'path': '/home/pi/Yumi-YMS-Manager', 'script': 'install.sh',
+     'origin': 'https://github.com/Yumi-Lab/Yumi-YMS-Manager.git'},
     # track:'head' -> re-run install.sh on EVERY pull, not just when install.sh
     # changes, so the web cache-busting tag (?v=<commit>) bumps on any update.
-    {'name': 'Yumi_ANC', 'path': '/home/pi/Yumi_ANC', 'script': 'install.sh', 'track': 'head'},
+    {'name': 'Yumi_ANC', 'path': '/home/pi/Yumi_ANC', 'script': 'install.sh', 'track': 'head',
+     'origin': 'https://github.com/Yumi-Lab/Yumi_ANC.git'},
 ]
 
 # === MAINSAIL → INJECTOR DEPENDENCY ===
@@ -426,11 +432,47 @@ def _repo_head(path):
         return None
 
 
+def _ensure_cloned(repo):
+    """git-clone a managed repo if it is missing and declares an 'origin'.
+
+    Solves the fresh-flash / OTA gap: yumi-config can ship a printer.cfg that
+    references a repo's config section (e.g. [yms_manager], [anc_...]) before the
+    repo itself was ever cloned -> Klipper halts with "not a valid config
+    section". YUMI_SYNC previously only re-ran install.sh for repos already on
+    disk; here we bootstrap-clone the ones marked with 'origin'. Returns True if
+    the repo's install.sh is present after the call."""
+    script_path = os.path.join(repo['path'], repo['script'])
+    if os.path.isfile(script_path):
+        return True
+    origin = repo.get('origin')
+    if not origin:
+        return False  # conditional repo (e.g. moonraker V1/V2): never auto-clone
+    logging.info("Repo %s: missing, cloning from %s ...", repo['name'], origin)
+    try:
+        result = subprocess.run(
+            ['git', 'clone', origin, repo['path']],
+            capture_output=True, text=True, timeout=300,
+            env={**os.environ, 'HOME': '/home/pi', 'GIT_TERMINAL_PROMPT': '0'},
+        )
+        if result.returncode != 0:
+            logging.error("Repo %s: clone failed: %s", repo['name'],
+                          (result.stderr or '')[-500:])
+            return False
+        # Match the build script: repos are owned by pi, not root.
+        subprocess.run(['chown', '-R', 'pi:pi', repo['path']],
+                       capture_output=True, timeout=60)
+        logging.info("Repo %s: cloned successfully", repo['name'])
+        return os.path.isfile(script_path)
+    except Exception as e:
+        logging.error("Repo %s: clone error: %s", repo['name'], e)
+        return False
+
+
 def repair_repos():
     install_state = _load_install_state()
     for repo in MANAGED_REPOS:
         script_path = os.path.join(repo['path'], repo['script'])
-        if not os.path.isfile(script_path):
+        if not _ensure_cloned(repo):
             continue
         # track:'head' keys on the repo's commit (re-run on any pull); default
         # keys on install.sh's hash (re-run only when the installer changes).
