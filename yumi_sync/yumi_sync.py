@@ -391,6 +391,13 @@ MANAGED_REPOS = [
     # changes, so the web cache-busting tag (?v=<commit>) bumps on any update.
     {'name': 'Yumi_ANC', 'path': '/home/pi/Yumi_ANC', 'script': 'install.sh', 'track': 'head',
      'origin': 'https://github.com/Yumi-Lab/Yumi_ANC.git'},
+    # NOTE: sonar (the WiFi-recovery daemon) is intentionally NOT a MANAGED_REPOS
+    # entry. repair_repos() only runs `bash <root install.sh>` with a fixed env,
+    # but sonar has no root install.sh (its installer is tools/install.sh, run as
+    # root via `make install`), needs SONAR_DATA_PATH/SONAR_UNATTENDED env, an
+    # interactive reboot prompt that would hang a oneshot, plus post-steps
+    # (mkdir systemd/, enable+start, fork update_manager entry). It is bootstrapped
+    # by ensure_sonar() instead — see that function.
 ]
 
 # === MAINSAIL → INJECTOR DEPENDENCY ===
@@ -518,6 +525,192 @@ def repair_repos():
             logging.error("Repo %s: install.sh timed out (300s)", repo['name'])
         except Exception as e:
             logging.error("Repo %s: install.sh error: %s", repo['name'], e)
+
+
+# === SONAR BOOTSTRAP (old builds that never shipped sonar) ===
+# sonar (Yumi-Lab/sonar) is the continuous WiFi-recovery daemon. Recent images
+# install it from the build's sonar module (make install + SONAR_DATA_PATH).
+# Builds made BEFORE that module existed have NO sonar at all -> 'systemctl
+# is-active sonar' = inactive, and none of the WiFi-recovery fixes can ever run.
+# Moonraker OTA can only update a repo already present, and repair_repos() can
+# only re-run a root-level install.sh. So we bootstrap sonar here, once,
+# idempotently; once installed, Moonraker's update_manager (fork origin) owns it.
+SONAR_REPO = '/home/pi/sonar'
+SONAR_ORIGIN = 'https://github.com/Yumi-Lab/sonar.git'
+SONAR_SERVICE = '/etc/systemd/system/sonar.service'
+SONAR_DATA_PATH = '/home/pi/printer_data'
+SONAR_CONF = '/home/pi/printer_data/config/sonar.conf'
+MOONRAKER_CONF = '/home/pi/printer_data/config/moonraker.conf'
+# enabled + NetworkManager-tuned config (matches the image build's sonar.conf;
+# upstream's resources/sonar.conf ships enable:false).
+SONAR_CONF_BODY = """[sonar]
+enable: true
+debug_log: false
+persistent_log: false
+target: auto
+count: 3
+interval: 30
+restart_threshold: 5
+dongle_recovery: true
+dongle_recovery_threshold: 3
+"""
+SONAR_UPDATE_BLOCK = """
+[update_manager sonar]
+type: git_repo
+path: ~/sonar
+origin: https://github.com/Yumi-Lab/sonar.git
+primary_branch: main
+managed_services: sonar
+"""
+
+
+def _sonar_clone():
+    logging.info("sonar: cloning %s -> %s", SONAR_ORIGIN, SONAR_REPO)
+    try:
+        r = subprocess.run(
+            ['git', 'clone', SONAR_ORIGIN, SONAR_REPO],
+            capture_output=True, text=True, timeout=300,
+            env={**os.environ, 'HOME': '/home/pi', 'GIT_TERMINAL_PROMPT': '0'},
+        )
+        if r.returncode != 0:
+            logging.error("sonar: clone failed: %s", (r.stderr or '')[-500:])
+            return False
+        subprocess.run(['chown', '-R', 'pi:pi', SONAR_REPO],
+                       capture_output=True, timeout=60)
+        return True
+    except Exception as e:
+        logging.error("sonar: clone error: %s", e)
+        return False
+
+
+def _sonar_write_conf():
+    """Write the enabled, NM-tuned sonar.conf (the installer would otherwise
+    leave upstream's enable:false default)."""
+    try:
+        with open(SONAR_CONF, 'w') as f:
+            f.write(SONAR_CONF_BODY)
+        subprocess.run(['chown', 'pi:pi', SONAR_CONF], capture_output=True, timeout=30)
+        logging.info("sonar: wrote enabled sonar.conf")
+    except Exception as e:
+        logging.error("sonar: cannot write sonar.conf: %s", e)
+
+
+def _sonar_add_update_manager():
+    """Point Moonraker OTA at the FORK. Upstream's installer hardcodes
+    mainsail-crew/sonar.git -> origin mismatch -> Moonraker invalidates the repo
+    (neither the service nor updates show up). Idempotent."""
+    if not os.path.isfile(MOONRAKER_CONF):
+        logging.error("sonar: moonraker.conf missing — update_manager entry skipped")
+        return
+    try:
+        with open(MOONRAKER_CONF, 'r') as f:
+            conf = f.read()
+        if 'mainsail-crew/sonar.git' in conf:
+            conf = conf.replace('https://github.com/mainsail-crew/sonar.git',
+                                'https://github.com/Yumi-Lab/sonar.git')
+            with open(MOONRAKER_CONF, 'w') as f:
+                f.write(conf)
+            logging.info("sonar: update_manager origin repointed to Yumi-Lab fork")
+        elif '[update_manager sonar]' not in conf:
+            with open(MOONRAKER_CONF, 'a') as f:
+                f.write(SONAR_UPDATE_BLOCK)
+            subprocess.run(['chown', 'pi:pi', MOONRAKER_CONF], capture_output=True, timeout=30)
+            logging.info("sonar: update_manager entry added (Yumi-Lab fork)")
+    except Exception as e:
+        logging.error("sonar: update_manager entry error: %s", e)
+
+
+def _sonar_enable_start():
+    """Enable + start sonar.service (idempotent). SONAR_UNATTENDED=1 makes the
+    installer skip this, and it also self-heals an installed-but-stopped sonar."""
+    try:
+        en = subprocess.run(['systemctl', 'is-enabled', 'sonar.service'],
+                            capture_output=True, text=True)
+        if en.stdout.strip() != 'enabled':
+            subprocess.run(['systemctl', 'enable', 'sonar.service'],
+                          capture_output=True, text=True, timeout=30)
+        subprocess.run(['systemctl', 'daemon-reload'], capture_output=True, timeout=30)
+        act = subprocess.run(['systemctl', 'is-active', 'sonar.service'],
+                            capture_output=True, text=True)
+        if act.stdout.strip() != 'active':
+            r = subprocess.run(['systemctl', 'start', 'sonar.service'],
+                              capture_output=True, text=True, timeout=60)
+            if r.returncode == 0:
+                logging.info("sonar: service started")
+            else:
+                logging.error("sonar: start failed: %s", (r.stderr or '')[-300:])
+    except Exception as e:
+        logging.error("sonar: enable/start error: %s", e)
+
+
+def ensure_sonar():
+    """Bootstrap-install sonar on OLD builds that never shipped it (the cause of
+    'sonar inactive' on some pads). Cheap no-op when sonar is already installed:
+    we only clone+install when /etc/systemd/system/sonar.service is missing.
+
+    The install mirrors the image build's sonar module but headless and
+    idempotent: SONAR_UNATTENDED=1 (no tools/.config, no interactive reboot
+    prompt that would hang a oneshot), SONAR_DATA_PATH set (else SONAR_SYSTEMD_PATH
+    is empty and 'cp sonar.env ""' fails), SONAR_ADD_SONAR_MOONRAKER=0 (we add the
+    correct fork update_manager entry ourselves). UNATTENDED=1 also skips
+    enable+start, so we do that afterwards."""
+    # Already installed by the build (or a previous run): just make sure it runs,
+    # then leave updates to Moonraker OTA.
+    if os.path.isfile(SONAR_SERVICE):
+        _sonar_enable_start()
+        return
+
+    logging.info("sonar: sonar.service missing — bootstrapping (old build without sonar)")
+    if not os.path.isdir(os.path.join(SONAR_REPO, '.git')) and not _sonar_clone():
+        return
+
+    install = os.path.join(SONAR_REPO, 'tools', 'install.sh')
+    if not os.path.isfile(install):
+        logging.error("sonar: %s missing after clone — aborting bootstrap", install)
+        return
+
+    # create_filestructure() makes config/ and logs/ but NOT systemd/, and the
+    # installer copies sonar.env into SONAR_SYSTEMD_PATH (= DATA_PATH/systemd).
+    systemd_dir = os.path.join(SONAR_DATA_PATH, 'systemd')
+    try:
+        os.makedirs(systemd_dir, exist_ok=True)
+        subprocess.run(['chown', '-R', 'pi:pi', systemd_dir], capture_output=True, timeout=30)
+    except Exception as e:
+        logging.error("sonar: cannot create %s: %s", systemd_dir, e)
+        return
+
+    env = os.environ.copy()
+    env.update({
+        'HOME': '/home/pi', 'USER': 'pi', 'LOGNAME': 'pi',
+        'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        'DEBIAN_FRONTEND': 'noninteractive',
+        'BASE_USER': 'pi',
+        'SONAR_UNATTENDED': '1',
+        'SONAR_DATA_PATH': SONAR_DATA_PATH,
+        'SONAR_ADD_SONAR_MOONRAKER': '0',
+    })
+    try:
+        r = subprocess.run(['bash', 'tools/install.sh'], cwd=SONAR_REPO, env=env,
+                           capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        logging.error("sonar: installer timed out (300s) — will retry next boot")
+        return
+    except Exception as e:
+        logging.error("sonar: installer error: %s", e)
+        return
+    if r.returncode != 0:
+        # apt may fail if the network is not up yet this boot; the missing
+        # sonar.service guard makes ensure_sonar() retry on the next boot.
+        logging.error("sonar: installer failed (exit %d) — will retry next boot\nstderr: %s",
+                      r.returncode, (r.stderr or '')[-500:])
+        return
+
+    logging.info("sonar: installer finished, configuring ...")
+    _sonar_write_conf()
+    _sonar_add_update_manager()
+    subprocess.run(['chown', '-R', 'pi:pi', SONAR_REPO], capture_output=True, timeout=60)
+    _sonar_enable_start()
+    logging.info("sonar: bootstrap complete")
 
 
 def repair_mainsail_injections():
@@ -1037,6 +1230,12 @@ def main():
         repair_repos()
     except Exception as e:
         logging.error("Repo repair failed: %s", e)
+
+    # Bootstrap sonar (WiFi-recovery daemon) on old builds that never shipped it
+    try:
+        ensure_sonar()
+    except Exception as e:
+        logging.error("sonar bootstrap failed: %s", e)
 
     # Re-apply the extruder lead patch if Klipper was updated / recovered / reset
     try:
